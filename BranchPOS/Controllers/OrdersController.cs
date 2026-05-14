@@ -89,7 +89,7 @@ public class OrdersController : Controller
             if (!ModelState.IsValid)
             {
                 Response.StatusCode = StatusCodes.Status400BadRequest;
-                return Json(new { success = false, message = "Please correct the order details and try again." });
+                return Json(new { success = false, message = GetModelStateMessage("Please correct the held order details and try again.") });
             }
 
             dto.CashierId = GetCashierId();
@@ -126,7 +126,7 @@ public class OrdersController : Controller
             if (!ModelState.IsValid)
             {
                 Response.StatusCode = StatusCodes.Status400BadRequest;
-                return Json(new { success = false, message = "Please correct the order details and try again." });
+                return Json(new { success = false, message = GetModelStateMessage("Please correct the order details and try again.") });
             }
 
             dto.CashierId = GetCashierId();
@@ -182,6 +182,16 @@ public class OrdersController : Controller
         var message = ex is BranchPosException branchPosException ? branchPosException.UserMessage : ex.Message;
         _errorLoggingService.LogException(HttpContext, ex, message);
         return message;
+    }
+
+    private string GetModelStateMessage(string fallback)
+    {
+        var firstError = ModelState.Values
+            .SelectMany(x => x.Errors)
+            .Select(x => x.ErrorMessage)
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+
+        return string.IsNullOrWhiteSpace(firstError) ? fallback : firstError;
     }
 }
 
