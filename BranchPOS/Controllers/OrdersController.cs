@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using BranchPOS.Services;
 using BranchPOS.ViewModels;
@@ -10,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "Admin,Cashier")]
+[Authorize(Roles = "Cashier")]
 public class OrdersController : Controller
 {
     private readonly AppDbContext _context;
@@ -18,19 +19,22 @@ public class OrdersController : Controller
     private readonly IProductAvailabilityService _productAvailabilityService;
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
+    private readonly IErrorLoggingService _errorLoggingService;
 
     public OrdersController(
         AppDbContext context,
         IOrderService orderService,
         IProductAvailabilityService productAvailabilityService,
         IUserSessionService userSessionService,
-        ITerminalContextService terminalContextService)
+        ITerminalContextService terminalContextService,
+        IErrorLoggingService errorLoggingService)
     {
         _context = context;
         _orderService = orderService;
         _productAvailabilityService = productAvailabilityService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
+        _errorLoggingService = errorLoggingService;
     }
 
     [Authorize(Roles = "Admin")]
@@ -82,6 +86,12 @@ public class OrdersController : Controller
     {
         try
         {
+            if (!ModelState.IsValid)
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                return Json(new { success = false, message = "Please correct the order details and try again." });
+            }
+
             dto.CashierId = GetCashierId();
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
             var session = await _userSessionService.GetActiveSessionAsync(dto.CashierId);
@@ -102,8 +112,9 @@ public class OrdersController : Controller
         }
         catch (InvalidOperationException ex)
         {
+            var message = ToUserMessage(ex);
             Response.StatusCode = StatusCodes.Status400BadRequest;
-            return Json(new { success = false, message = ex.Message });
+            return Json(new { success = false, message });
         }
     }
 
@@ -112,6 +123,12 @@ public class OrdersController : Controller
     {
         try
         {
+            if (!ModelState.IsValid)
+            {
+                Response.StatusCode = StatusCodes.Status400BadRequest;
+                return Json(new { success = false, message = "Please correct the order details and try again." });
+            }
+
             dto.CashierId = GetCashierId();
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
             var session = await _userSessionService.GetActiveSessionAsync(dto.CashierId);
@@ -129,8 +146,9 @@ public class OrdersController : Controller
         }
         catch (InvalidOperationException ex)
         {
+            var message = ToUserMessage(ex);
             Response.StatusCode = StatusCodes.Status400BadRequest;
-            return Json(new { success = false, message = ex.Message });
+            return Json(new { success = false, message });
         }
     }
 
@@ -144,8 +162,9 @@ public class OrdersController : Controller
         }
         catch (InvalidOperationException ex)
         {
+            var message = ToUserMessage(ex);
             Response.StatusCode = StatusCodes.Status400BadRequest;
-            return Json(new { success = false, message = ex.Message });
+            return Json(new { success = false, message });
         }
     }
 
@@ -157,6 +176,13 @@ public class OrdersController : Controller
 
     private string GetCashierId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new InvalidOperationException("Authenticated user was not found.");
+
+    private string ToUserMessage(InvalidOperationException ex)
+    {
+        var message = ex is BranchPosException branchPosException ? branchPosException.UserMessage : ex.Message;
+        _errorLoggingService.LogException(HttpContext, ex, message);
+        return message;
+    }
 }
 
 public class CancelDraftRequest

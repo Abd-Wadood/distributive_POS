@@ -138,7 +138,7 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         await using var setup = CreateContext();
         var ingredientId = await CreateProductWithInventoryAsync(setup, "Combo", 2m, 1m);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             OrderService(setup).FinalizeOrderAsync(OrderDto(productId: 1, quantity: 1)));
 
         Assert.Empty(await setup.Orders.Where(x => x.OrderStatus == OrderStatus.Completed).ToListAsync());
@@ -162,12 +162,12 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         Assert.Equal(1, await context.InventoryTransactions.CountAsync(x => x.TransactionType == InventoryTransactionType.Sale));
         Assert.NotNull(await service.GetReceiptAsync(completed.OrderId));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             service.FinalizeOrderAsync(OrderDto(productId: 1, draftId: completed.OrderId, customerPhone: "3020")));
 
         var cancelledDraft = await service.CreateDraftOrderAsync(DraftDto(productId: 1, customerPhone: "3021"));
         await service.CancelDraftOrderAsync(cancelledDraft.OrderId, CashierId);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             service.FinalizeOrderAsync(OrderDto(productId: 1, draftId: cancelledDraft.OrderId, customerPhone: "3022")));
 
         Assert.Equal(1, await context.Orders.CountAsync(x => x.OrderStatus == OrderStatus.Completed));
@@ -184,14 +184,14 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         await context.SaveChangesAsync();
 
         var service = OrderService(context);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 2)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 3)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 999)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 0)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: -1)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 10001)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 0)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, orderType: "Delivery", customerPhone: "3030", address: "")));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 2)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 3)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 999)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 0)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: -1)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 10001)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 0)));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId: 1, orderType: "Delivery", customerPhone: "3030", address: "")));
 
         var result = await service.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 2, discount: 5m, customerPhone: "3031"));
         Assert.Equal(50m, result.Subtotal);
@@ -205,10 +205,10 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         await CreateProductWithInventoryAsync(context, "Juice", 1m, 5m);
         var sessionService = UserSessionService(context);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             OrderService(context).FinalizeOrderAsync(OrderDto(productId: 1, cashierId: "no-session")));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             InventoryService(context).AdjustInventoryAsync(new InventoryAdjustmentDto
             {
                 BranchId = 1,
@@ -220,10 +220,10 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
                 QuantityChanged = 1m
             }));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             OrderService(context).FinalizeOrderAsync(OrderDto(productId: 1, cashierId: StockManagerId, userSessionId: 2, customerPhone: "3040")));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.StartSessionAsync(new StartSessionDto
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => sessionService.StartSessionAsync(new StartSessionDto
         {
             UserId = CashierId,
             BranchId = 1,
@@ -234,7 +234,7 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         }));
 
         var draft = await OrderService(context).CreateDraftOrderAsync(DraftDto(productId: 1, customerPhone: "3041"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.EndSessionAsync(1, CashierId));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => sessionService.EndSessionAsync(1, CashierId));
         await OrderService(context).CancelDraftOrderAsync(draft.OrderId, CashierId);
         await sessionService.EndSessionAsync(1, CashierId);
 
@@ -272,10 +272,10 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         await context.SaveChangesAsync();
 
         var branchAService = OrderService(context);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => branchAService.FinalizeOrderAsync(OrderDto(productId: 2, customerPhone: "3050")));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => branchAService.FinalizeOrderAsync(OrderDto(productId: 2, customerPhone: "3050")));
 
         var branchBDraft = await OrderService(context, branchId: 2).CreateDraftOrderAsync(DraftDto(productId: 2, cashierId: BranchTwoCashierId, userSessionId: 3, terminalId: 2, terminalCode: "B2-01", customerPhone: "3051"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             branchAService.FinalizeOrderAsync(OrderDto(productId: 2, draftId: branchBDraft.OrderId, customerPhone: "3052")));
 
         Assert.Equal(2, await context.Customers.CountAsync(x => x.PhoneNumber == "555"));
@@ -288,13 +288,13 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         await using var context = CreateContext();
         await CreateProductWithInventoryAsync(context, "Coffee", 1m, 3m);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             OrderService(context).FinalizeOrderAsync(OrderDto(productId: 1, terminalId: 0, terminalCode: "")));
 
         context.UserSessions.Single(x => x.Id == 1).TerminalId = 3;
         context.UserSessions.Single(x => x.Id == 1).TerminalCode = "INACTIVE-01";
         await context.SaveChangesAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             OrderService(context).FinalizeOrderAsync(OrderDto(productId: 1, terminalId: 3, terminalCode: "INACTIVE-01")));
 
         context.UserSessions.Single(x => x.Id == 1).TerminalId = 1;
@@ -332,7 +332,7 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
             Items = { new PurchaseItemDto { IngredientId = ingredientId, Quantity = 2m, UnitCost = 10m } }
         });
         await orderService.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 2));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             purchaseService.CreatePurchaseAsync(new CreatePurchaseDto
             {
                 BranchId = 1,
@@ -343,7 +343,7 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
                 SupplierId = 1,
                 Items = { new PurchaseItemDto { IngredientId = ingredientId, Quantity = 0m, UnitCost = 10m } }
             }));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => orderService.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 10001, customerPhone: "3070")));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => orderService.FinalizeOrderAsync(OrderDto(productId: 1, quantity: 10001, customerPhone: "3070")));
 
         var inventory = await context.Inventories.SingleAsync(x => x.IngredientId == ingredientId);
         var ledgerSum = await context.InventoryTransactions.Where(x => x.IngredientId == ingredientId).SumAsync(x => x.QuantityChanged);

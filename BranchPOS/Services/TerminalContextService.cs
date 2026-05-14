@@ -1,4 +1,5 @@
 using BranchPOS.Data;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,7 +46,7 @@ public class TerminalContextService : ITerminalContextService
 
     public async Task<Terminal> RequireCurrentTerminalAsync(CancellationToken cancellationToken = default) =>
         await GetCurrentTerminalAsync(cancellationToken)
-        ?? throw new InvalidOperationException("Terminal is not registered or is inactive.");
+        ?? throw new BusinessException("Terminal is not registered or is inactive. Register this terminal before continuing.");
 
     public async Task HeartbeatAsync(string? userId = null, int? sessionId = null, CancellationToken cancellationToken = default)
     {

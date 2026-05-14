@@ -70,6 +70,80 @@ public class TerminalsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    public async Task<IActionResult> Edit(int id)
+    {
+        var terminal = await _context.Terminals.FirstOrDefaultAsync(x => x.Id == id);
+        if (terminal is null)
+        {
+            return NotFound();
+        }
+
+        await _branchService.EnsureBranchAccessAsync(User.GetUserId(), terminal.BranchId);
+        return View(await BuildEditModelAsync(new TerminalEditViewModel
+        {
+            Id = terminal.Id,
+            TerminalCode = terminal.TerminalCode,
+            BranchId = terminal.BranchId,
+            Name = terminal.Name,
+            IpAddress = terminal.IpAddress,
+            IsActive = terminal.IsActive
+        }));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(int id, TerminalEditViewModel model)
+    {
+        if (id != model.Id)
+        {
+            return BadRequest();
+        }
+
+        model.TerminalCode = TerminalContextService.NormalizeCode(model.TerminalCode);
+        if (string.IsNullOrWhiteSpace(model.TerminalCode))
+        {
+            ModelState.AddModelError(nameof(model.TerminalCode), "Terminal code is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            ModelState.AddModelError(nameof(model.Name), "Terminal name is required.");
+        }
+
+        if (await _context.Terminals.AnyAsync(x => x.Id != id && x.TerminalCode == model.TerminalCode))
+        {
+            ModelState.AddModelError(nameof(model.TerminalCode), "Terminal code already exists.");
+        }
+
+        try
+        {
+            await _branchService.EnsureBranchAccessAsync(User.GetUserId(), model.BranchId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(nameof(model.BranchId), ex.Message);
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View(await BuildEditModelAsync(model));
+        }
+
+        var terminal = await _context.Terminals.FirstOrDefaultAsync(x => x.Id == id);
+        if (terminal is null)
+        {
+            return NotFound();
+        }
+
+        terminal.TerminalCode = model.TerminalCode;
+        terminal.BranchId = model.BranchId;
+        terminal.Name = model.Name.Trim();
+        terminal.IpAddress = string.IsNullOrWhiteSpace(model.IpAddress) ? null : model.IpAddress.Trim();
+        terminal.IsActive = model.IsActive;
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Index));
+    }
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Toggle(int id)
     {
@@ -112,6 +186,15 @@ public class TerminalsController : Controller
                 .OrderByDescending(x => x.LastSeenAt)
                 .ToListAsync()
         };
+    }
+
+    private async Task<TerminalEditViewModel> BuildEditModelAsync(TerminalEditViewModel model)
+    {
+        var branches = await _branchService.GetBranchesForUserAsync(User.GetUserId());
+        model.Branches = branches
+            .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.BranchId))
+            .ToList();
+        return model;
     }
 }
 

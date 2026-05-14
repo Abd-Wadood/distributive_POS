@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "Admin,StockManager")]
+[Authorize(Roles = "StockManager")]
 public class IngredientsController : Controller
 {
     private readonly AppDbContext _context;
@@ -22,7 +22,7 @@ public class IngredientsController : Controller
 
     public override void OnActionExecuting(ActionExecutingContext context)
     {
-        if (User.IsInRole("Cashier") && !User.IsInRole("Admin"))
+        if (!User.IsInRole("StockManager"))
         {
             context.Result = Forbid();
             return;

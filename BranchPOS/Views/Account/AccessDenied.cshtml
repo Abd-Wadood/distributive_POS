@@ -2,5 +2,15 @@
     ViewData["Title"] = "Access denied";
 }
 
-<h1>Access denied</h1>
-<p>Your account does not have permission to open this page.</p>
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <h1 class="h3 mb-3">Access denied</h1>
+                <p class="text-muted mb-3">You do not have permission to access this section.</p>
+                <p class="mb-4">Use the section assigned to your role, or contact an administrator if you believe this access is required.</p>
+                <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Back to dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>

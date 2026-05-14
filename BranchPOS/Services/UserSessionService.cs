@@ -1,5 +1,6 @@
 using BranchPOS.Data;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using BranchPOS.ViewModels;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ public class UserSessionService : IUserSessionService
     {
         if (dto.TerminalId <= 0 || string.IsNullOrWhiteSpace(dto.TerminalCode))
         {
-            throw new InvalidOperationException("Terminal is not registered.");
+            throw new BusinessException("Terminal is not registered. Register this terminal before starting a session.");
         }
 
         await _branchService.EnsureBranchAccessAsync(dto.UserId, dto.BranchId, cancellationToken);
@@ -33,7 +34,7 @@ public class UserSessionService : IUserSessionService
         var active = await GetActiveSessionAsync(dto.UserId, cancellationToken);
         if (active is not null)
         {
-            throw new InvalidOperationException($"You already have an active session ({active.SessionCode}). Continue or end it before starting a new session.");
+            throw new BusinessException($"You already have an active session ({active.SessionCode}). Continue or end it before starting a new session.");
         }
 
         var session = new UserSession
@@ -56,7 +57,7 @@ public class UserSessionService : IUserSessionService
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            throw new InvalidOperationException("You already have an active session. Continue or end it before starting a new session.", ex);
+            throw new BusinessException("You already have an active session. Continue or end it before starting a new session.", innerException: ex);
         }
 
         await HeartbeatAsync(session.Id, session.TerminalName, cancellationToken);
@@ -86,13 +87,13 @@ public class UserSessionService : IUserSessionService
 
         if (session is null)
         {
-            throw new InvalidOperationException("Session was not found.");
+            throw new PosNotFoundException("Session was not found. Refresh the page and try again.");
         }
 
         var active = await GetActiveSessionAsync(userId, cancellationToken);
         if (active is not null && active.Id != session.Id)
         {
-            throw new InvalidOperationException("End the current active session before resuming another session.");
+            throw new BusinessException("End the current active session before resuming another session.");
         }
 
         session.Status = SessionStatus.Active;
@@ -103,7 +104,7 @@ public class UserSessionService : IUserSessionService
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            throw new InvalidOperationException("End the current active session before resuming another session.", ex);
+            throw new BusinessException("End the current active session before resuming another session.", innerException: ex);
         }
 
         await HeartbeatAsync(session.Id, session.TerminalName, cancellationToken);
@@ -119,7 +120,7 @@ public class UserSessionService : IUserSessionService
 
         if (session is null)
         {
-            throw new InvalidOperationException("Active session was not found.");
+            throw new PosNotFoundException("Active session was not found. Start or resume a session first.");
         }
 
         var activeDrafts = await _context.Orders.CountAsync(x =>
@@ -128,7 +129,7 @@ public class UserSessionService : IUserSessionService
 
         if (activeDrafts > 0)
         {
-            throw new InvalidOperationException("Complete or cancel active draft orders before ending the session.");
+            throw new BusinessException("Complete or cancel active draft orders before ending the session.");
         }
 
         session.Status = SessionStatus.Ended;
@@ -158,7 +159,7 @@ public class UserSessionService : IUserSessionService
             .Include(x => x.User)
             .Include(x => x.Branch)
             .FirstOrDefaultAsync(x => x.Id == sessionId, cancellationToken)
-            ?? throw new InvalidOperationException("Session was not found.");
+            ?? throw new PosNotFoundException("Session was not found. Refresh the page and try again.");
 
         var purchases = await _context.Purchases
             .Include(x => x.Items)

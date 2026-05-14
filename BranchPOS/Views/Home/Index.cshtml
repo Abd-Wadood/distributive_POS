@@ -1,33 +1,163 @@
+@model BranchPOS.ViewModels.AdminDashboardViewModel?
 @{
-    ViewData["Title"] = "Branch Operations";
+    ViewData["Title"] = User.IsInRole("Admin") ? "Admin Dashboard" : "Branch Operations";
     var isAdmin = User.IsInRole("Admin");
-    var isCashierOnly = User.IsInRole("Cashier") && !isAdmin;
-    var isStockManagerOnly = User.IsInRole("StockManager") && !isAdmin && !isCashierOnly;
+    var isCashier = User.IsInRole("Cashier") && !isAdmin;
+    var isStockManager = User.IsInRole("StockManager") && !isAdmin;
 }
-
-<h1>Branch POS</h1>
-<p>Offline-first branch server for products, ingredient inventory, purchases, and orders.</p>
 
 @if (User.Identity?.IsAuthenticated != true)
 {
-    <a class="btn btn-primary" asp-controller="Account" asp-action="Login">Login</a>
+    <div class="py-4">
+        <h1>Branch POS</h1>
+        <p class="text-muted">Offline-first branch server for products, ingredient inventory, purchases, and orders.</p>
+        <a class="btn btn-primary" asp-controller="Account" asp-action="Login">Login</a>
+    </div>
+}
+else if (isAdmin && Model is not null)
+{
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="mb-1">Admin Dashboard</h1>
+            <p class="text-muted mb-0">Manage structure, users, terminals, and read-only branch reporting.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" asp-controller="Reports" asp-action="Index">Open reports</a>
+            <a class="btn btn-primary" asp-controller="Users" asp-action="Index">Manage users</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <a class="card h-100 text-decoration-none text-dark" asp-controller="Users" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small">Users</div>
+                    <div class="display-6">@Model.TotalUsers</div>
+                    <div class="small text-muted">Manage accounts, roles, and branch assignments</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a class="card h-100 text-decoration-none text-dark" asp-controller="Branches" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small">Active branches</div>
+                    <div class="display-6">@Model.ActiveBranches</div>
+                    <div class="small text-muted">Branch structure and availability</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a class="card h-100 text-decoration-none text-dark" asp-controller="Terminals" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small">Registered terminals</div>
+                    <div class="display-6">@Model.TotalTerminals</div>
+                    <div class="small text-muted">Terminal assignment and status</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <a class="card h-100 text-decoration-none text-dark" asp-controller="Categories" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small">Categories</div>
+                    <div class="display-6">@Model.TotalCategories</div>
+                    <div class="small text-muted">Product grouping and catalog structure</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <a class="card h-100 text-decoration-none text-dark" asp-controller="Reports" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small">Today's sales</div>
+                    <div class="h2 mb-1">@Model.TodaySalesTotal.ToString("C")</div>
+                    <div class="small text-muted">@Model.TodayCompletedOrders completed orders</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Active sessions</div>
+                    <div class="h2 mb-1">@Model.ActiveSessions</div>
+                    <div class="small text-muted">Cashier and stock sessions currently active</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <a class="card h-100 text-decoration-none text-dark" asp-controller="Reports" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small">Low stock alerts</div>
+                    <div class="h2 mb-1">@Model.LowStockCount</div>
+                    <div class="small text-muted">Read-only inventory summary in reports</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="h5 mb-0">Recent Sessions</h2>
+                <div class="small text-muted">Latest branch activity by role and terminal</div>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="Reports" asp-action="Index">View reports</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Session</th>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Branch</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var session in Model.RecentSessions)
+                    {
+                        <tr>
+                            <td>@session.SessionCode</td>
+                            <td>@(session.User?.Email ?? session.UserId)</td>
+                            <td>@session.RoleName</td>
+                            <td>@session.Branch?.Name</td>
+                            <td><span class="badge text-bg-light">@session.Status</span></td>
+                            <td>@session.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                    }
+                    @if (Model.RecentSessions.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-muted">No sessions recorded yet.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
 else
 {
-    <div class="list-group">
-        @if (isCashierOnly)
-        {
-            <a class="list-group-item list-group-item-action" asp-controller="Orders" asp-action="Create">Create order</a>
-        }
-        @if (isAdmin || isStockManagerOnly)
-        {
-            <a class="list-group-item list-group-item-action" asp-controller="Products" asp-action="Index">Products</a>
-            <a class="list-group-item list-group-item-action" asp-controller="Inventory" asp-action="Index">Inventory</a>
-        }
-        @if (isAdmin)
-        {
-            <a class="list-group-item list-group-item-action" asp-controller="Orders" asp-action="Index">Orders</a>
-            <a class="list-group-item list-group-item-action" asp-controller="Users" asp-action="Index">Users</a>
-        }
+    <div class="py-4">
+        <h1>Branch POS</h1>
+        <p class="text-muted">Choose the workspace for your current role.</p>
+        <div class="list-group">
+            @if (isCashier)
+            {
+                <a class="list-group-item list-group-item-action" asp-controller="Orders" asp-action="Create">Open POS order screen</a>
+                <a class="list-group-item list-group-item-action" asp-controller="Sessions" asp-action="Index">Manage cashier session</a>
+            }
+            @if (isStockManager)
+            {
+                <a class="list-group-item list-group-item-action" asp-controller="Products" asp-action="Index">Products</a>
+                <a class="list-group-item list-group-item-action" asp-controller="Ingredients" asp-action="Index">Ingredients</a>
+                <a class="list-group-item list-group-item-action" asp-controller="Inventory" asp-action="Index">Inventory</a>
+                <a class="list-group-item list-group-item-action" asp-controller="Purchases" asp-action="Index">Purchases</a>
+                <a class="list-group-item list-group-item-action" asp-controller="Sessions" asp-action="Index">Manage stock session</a>
+            }
+        </div>
     </div>
 }

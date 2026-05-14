@@ -90,4 +90,18 @@ public class BranchesController : Controller
         await _context.SaveChangesAsync();
         return RedirectToAction(nameof(Index));
     }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleActive(int id)
+    {
+        var branch = await _context.Branches.FindAsync(id);
+        if (branch is null)
+        {
+            return NotFound();
+        }
+
+        branch.IsActive = !branch.IsActive;
+        await _context.SaveChangesAsync();
+        return RedirectToAction(nameof(Index));
+    }
 }

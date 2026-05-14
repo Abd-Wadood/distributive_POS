@@ -198,3 +198,4 @@ C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\bin\Debug\net10.0\Microsof
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\bin\Debug\net10.0\Npgsql.dll
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\bin\Debug\net10.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\obj\Debug\net10.0\compressed\xdk086umr8-{0}-cs22e263yl-cs22e263yl.gz
+C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\obj\Debug\net10.0\BranchPOS.sourcelink.json

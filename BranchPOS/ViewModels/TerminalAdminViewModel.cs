@@ -24,3 +24,10 @@ public class TerminalCreateViewModel
 
     public List<SelectListItem> Branches { get; set; } = new();
 }
+
+public class TerminalEditViewModel : TerminalCreateViewModel
+{
+    public int Id { get; set; }
+
+    public bool IsActive { get; set; }
+}

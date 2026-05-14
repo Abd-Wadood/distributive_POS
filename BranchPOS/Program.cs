@@ -2,6 +2,7 @@ using BranchPOS.Data;
 using BranchPOS.Models;
 using BranchPOS.Repositories;
 using BranchPOS.Services;
+using BranchPOS.Middleware;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,8 +42,12 @@ builder.Services.AddScoped<IBranchContextService, BranchContextService>();
 builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<ITerminalContextService, TerminalContextService>();
 builder.Services.AddScoped<IIdentitySeedService, IdentitySeedService>();
+builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+builder.Services.AddScoped<IErrorLoggingService, ErrorLoggingService>();
 
 var app = builder.Build();
+
+app.UseMiddleware<FriendlyExceptionMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -60,6 +65,7 @@ app.Use(async (context, next) =>
     var path = context.Request.Path;
     var isBypassPath =
         path.StartsWithSegments("/TerminalSetup") ||
+        path.StartsWithSegments("/Account") ||
         path.StartsWithSegments("/css") ||
         path.StartsWithSegments("/js") ||
         path.StartsWithSegments("/lib") ||

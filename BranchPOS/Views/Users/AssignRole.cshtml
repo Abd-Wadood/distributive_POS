@@ -9,7 +9,13 @@
 <p>Current roles: @string.Join(", ", currentRoles)</p>
 
 <form method="post" class="col-md-4">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <label class="form-label">Role</label>
     <select name="role" class="form-select mb-3" asp-items="ViewBag.Roles"></select>
+    <label class="form-label">Branch</label>
+    <select name="branchId" class="form-select mb-3" asp-items="ViewBag.Branches">
+        <option value="">No branch</option>
+    </select>
     <button type="submit" class="btn btn-primary">Assign</button>
     <a class="btn btn-secondary" asp-action="Index">Cancel</a>
 </form>

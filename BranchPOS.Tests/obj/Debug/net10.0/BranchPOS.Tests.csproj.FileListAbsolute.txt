@@ -111,3 +111,4 @@ C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS.Tests\obj\Debug\net10.0\re
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS.Tests\obj\Debug\net10.0\BranchPOS.Tests.pdb
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS.Tests\obj\Debug\net10.0\BranchPOS.Tests.genruntimeconfig.cache
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS.Tests\obj\Debug\net10.0\ref\BranchPOS.Tests.dll
+C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS.Tests\obj\Debug\net10.0\BranchPOS.Tests.sourcelink.json

@@ -1,13 +1,26 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using BranchPOS.Models;
+using BranchPOS.Services;
 
 namespace BranchPOS.Controllers;
 
 public class HomeController : Controller
 {
-    public IActionResult Index()
+    private readonly IAdminDashboardService _adminDashboardService;
+
+    public HomeController(IAdminDashboardService adminDashboardService)
     {
+        _adminDashboardService = adminDashboardService;
+    }
+
+    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    {
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Admin"))
+        {
+            return View(await _adminDashboardService.GetDashboardAsync(cancellationToken));
+        }
+
         return View();
     }
 

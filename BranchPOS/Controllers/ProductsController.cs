@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "Admin,StockManager")]
+[Authorize(Roles = "StockManager")]
 public class ProductsController : Controller
 {
     private readonly AppDbContext _context;
@@ -26,7 +26,7 @@ public class ProductsController : Controller
 
     public override void OnActionExecuting(ActionExecutingContext context)
     {
-        if (User.IsInRole("Cashier") && !User.IsInRole("Admin"))
+        if (!User.IsInRole("StockManager"))
         {
             context.Result = Forbid();
             return;
@@ -41,13 +41,13 @@ public class ProductsController : Controller
         return View(products);
     }
 
-    [Authorize(Roles = "Admin,StockManager")]
+    [Authorize(Roles = "StockManager")]
     public async Task<IActionResult> Create()
     {
         return View(await BuildProductModelAsync(new ProductEditViewModel()));
     }
 
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Admin,StockManager")]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "StockManager")]
     public async Task<IActionResult> Create(ProductEditViewModel model)
     {
         if (!ModelState.IsValid)
@@ -62,7 +62,7 @@ public class ProductsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    [Authorize(Roles = "Admin,StockManager")]
+    [Authorize(Roles = "StockManager")]
     public async Task<IActionResult> Edit(int id)
     {
         var product = await _productService.GetProductAsync(id);
@@ -82,7 +82,7 @@ public class ProductsController : Controller
         return View(await BuildProductModelAsync(model, product));
     }
 
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Admin,StockManager")]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "StockManager")]
     public async Task<IActionResult> Edit(int id, ProductEditViewModel model)
     {
         if (id != model.Id)

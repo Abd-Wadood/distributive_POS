@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BranchPOS.DTOs;
 
 public class InventoryAdjustmentDto
@@ -12,8 +14,10 @@ public class InventoryAdjustmentDto
 
     public string TerminalCode { get; set; } = string.Empty;
 
+    [Range(1, int.MaxValue)]
     public int IngredientId { get; set; }
 
+    [Range(typeof(decimal), "-1000000", "1000000")]
     public decimal QuantityChanged { get; set; }
 
     public string? Reason { get; set; }

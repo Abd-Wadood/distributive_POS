@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace BranchPOS.ViewModels;
 
 public class PurchaseCreateViewModel
 {
+    [Range(1, int.MaxValue, ErrorMessage = "Supplier is required.")]
     public int SupplierId { get; set; }
 
     public List<SelectListItem> Suppliers { get; set; } = new();
@@ -17,7 +19,9 @@ public class PurchaseItemInputModel
 {
     public int IngredientId { get; set; }
 
+    [Range(typeof(decimal), "0", "1000000", ErrorMessage = "Quantity must be greater than zero when an ingredient is selected.")]
     public decimal Quantity { get; set; }
 
+    [Range(typeof(decimal), "0", "999999999", ErrorMessage = "Unit cost cannot be negative.")]
     public decimal UnitCost { get; set; }
 }

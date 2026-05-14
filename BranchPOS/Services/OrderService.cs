@@ -1,6 +1,7 @@
 using System.Data;
 using BranchPOS.Data;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -102,7 +103,7 @@ public class OrderService : IOrderService
 
             if (dto.DraftOrderId.HasValue && order is null)
             {
-                throw new InvalidOperationException("Draft order was not found.");
+                throw new PosNotFoundException("Draft order was not found. Refresh the order list and try again.");
             }
 
             order ??= new Order
@@ -146,6 +147,12 @@ public class OrderService : IOrderService
             await transaction.CommitAsync(cancellationToken);
             return ToResult(order);
         }
+        catch (Exception ex) when (ex is not BranchPosException && DatabaseErrorTranslator.IsConcurrencyFailure(ex))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            _context.ChangeTracker.Clear();
+            throw DatabaseErrorTranslator.ToUserException(ex, "Order could not be completed. Please retry.");
+        }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None);
@@ -166,7 +173,7 @@ public class OrderService : IOrderService
 
         if (order is null)
         {
-            throw new InvalidOperationException("Draft order was not found.");
+            throw new PosNotFoundException("Draft order was not found. Refresh the order list and try again.");
         }
 
         order.OrderStatus = OrderStatus.Cancelled;
@@ -214,7 +221,7 @@ public class OrderService : IOrderService
 
         if (dto.DraftOrderId.HasValue && order is null)
         {
-            throw new InvalidOperationException("Draft order was not found.");
+            throw new PosNotFoundException("Draft order was not found. Refresh the order list and try again.");
         }
 
         order ??= new Order
@@ -244,17 +251,17 @@ public class OrderService : IOrderService
         var itemList = items.ToList();
         if (itemList.Any(x => x.ProductId <= 0))
         {
-            throw new InvalidOperationException("Order contains an invalid product.");
+            throw new PosValidationException("One of the selected products is invalid. Refresh the POS screen and try again.");
         }
 
         if (itemList.Any(x => x.Quantity <= 0))
         {
-            throw new InvalidOperationException("Order item quantity must be greater than zero.");
+            throw new PosValidationException("Order item quantity must be greater than zero.");
         }
 
         if (itemList.Any(x => x.Quantity > MaxOrderItemQuantity))
         {
-            throw new InvalidOperationException("Order item quantity is too large.");
+            throw new PosValidationException("Order item quantity is too large.");
         }
 
         var normalized = itemList
@@ -264,7 +271,7 @@ public class OrderService : IOrderService
 
         if (!allowEmpty && normalized.Count == 0)
         {
-            throw new InvalidOperationException("Order must contain at least one item.");
+            throw new PosValidationException("Order must contain at least one item.");
         }
 
         return normalized;
@@ -280,7 +287,7 @@ public class OrderService : IOrderService
 
         if (products.Count != productIds.Count)
         {
-            throw new InvalidOperationException("One or more products were not found.");
+            throw new PosNotFoundException("One or more products are unavailable. Refresh the POS screen and try again.");
         }
 
         var pricedItems = new List<PricedOrderItem>();
@@ -289,7 +296,7 @@ public class OrderService : IOrderService
             var product = products.Single(x => x.Id == requestedItem.ProductId);
             if (requireRecipe && product.ProductIngredients.Count == 0)
             {
-                throw new InvalidOperationException($"{product.Name} has no recipe ingredients configured.");
+                throw new BusinessException($"{product.Name} cannot be sold because its recipe is incomplete.");
             }
 
             pricedItems.Add(new PricedOrderItem(product, requestedItem.Quantity));
@@ -305,7 +312,7 @@ public class OrderService : IOrderService
         {
             if (pricedItem.Product.ProductIngredients.Count == 0)
             {
-                throw new InvalidOperationException($"{pricedItem.Product.Name} has no recipe ingredients configured.");
+                throw new BusinessException($"{pricedItem.Product.Name} cannot be sold because its recipe is incomplete.");
             }
 
             foreach (var recipeItem in pricedItem.Product.ProductIngredients)
@@ -329,7 +336,7 @@ public class OrderService : IOrderService
 
             if (inventory is null)
             {
-                throw new InvalidOperationException($"Ingredient {ingredientId} has no inventory record.");
+                throw new BusinessException("Product recipe is missing an inventory record. Ask a StockManager to review ingredients.");
             }
 
             lockedInventories.Add(inventory);
@@ -345,7 +352,7 @@ public class OrderService : IOrderService
             var inventory = lockedInventories.Single(x => x.IngredientId == required.Key);
             if (inventory.CurrentQuantity < required.Value)
             {
-                throw new InvalidOperationException($"Insufficient stock for ingredient {required.Key}.");
+                throw new BusinessException("Not enough stock to complete this order.");
             }
         }
     }
@@ -388,7 +395,7 @@ public class OrderService : IOrderService
 
         if (order.DiscountAmount > order.Subtotal)
         {
-            throw new InvalidOperationException("Discount cannot be greater than subtotal.");
+            throw new PosValidationException("Discount cannot be greater than subtotal.");
         }
 
         order.TotalAmount = order.Subtotal - order.DiscountAmount;
@@ -403,12 +410,12 @@ public class OrderService : IOrderService
         {
             if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
             {
-                throw new InvalidOperationException("Customer phone is required for delivery orders.");
+                throw new PosValidationException("Customer phone is required for delivery orders.");
             }
 
             if (string.IsNullOrWhiteSpace(customer.Address))
             {
-                throw new InvalidOperationException("Customer address is required for delivery orders.");
+                throw new PosValidationException("Customer address is required for delivery orders.");
             }
         }
     }
@@ -423,17 +430,16 @@ public class OrderService : IOrderService
     private async Task<UserSession> RequireActiveSessionAsync(string userId, int userSessionId, CancellationToken cancellationToken)
     {
         var activeSession = await _userSessionService.GetActiveSessionAsync(userId, cancellationToken)
-            ?? throw new InvalidOperationException("Start or continue an active session before creating orders.");
+            ?? throw new BusinessException("Start or continue an active cashier session before creating orders.");
 
-        if (!string.Equals(activeSession.RoleName, "Cashier", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(activeSession.RoleName, "Admin", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(activeSession.RoleName, "Cashier", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Active cashier session is required for order finalization.");
+            throw new BusinessException("Active cashier session is required for order finalization.");
         }
 
         if (userSessionId > 0 && activeSession.Id != userSessionId)
         {
-            throw new InvalidOperationException("Order session does not match the active user session.");
+            throw new BusinessException("Order session does not match the active user session. Resume the correct session and try again.");
         }
 
         return activeSession;
@@ -449,7 +455,7 @@ public class OrderService : IOrderService
 
         if (!terminalIsActive)
         {
-            throw new InvalidOperationException("Terminal is not registered or is inactive.");
+            throw new BusinessException("Terminal is not registered or is inactive. Register this terminal or contact an administrator.");
         }
     }
 
@@ -457,22 +463,22 @@ public class OrderService : IOrderService
     {
         if (session.TerminalId <= 0 || string.IsNullOrWhiteSpace(session.TerminalCode))
         {
-            throw new InvalidOperationException("Active session has no registered terminal.");
+            throw new BusinessException("Active session has no registered terminal. End this session and start a new one on a registered terminal.");
         }
 
         if (dto.TerminalId <= 0 || string.IsNullOrWhiteSpace(dto.TerminalCode))
         {
-            throw new InvalidOperationException("Terminal identity is required.");
+            throw new BusinessException("Terminal identity is required. Register this terminal before continuing.");
         }
 
         if (dto.TerminalId != session.TerminalId)
         {
-            throw new InvalidOperationException("Terminal does not match the active user session.");
+            throw new BusinessException("Terminal does not match the active user session. End or resume the correct session for this terminal.");
         }
 
         if (!string.Equals(dto.TerminalCode, session.TerminalCode, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Terminal does not match the active user session.");
+            throw new BusinessException("Terminal does not match the active user session. End or resume the correct session for this terminal.");
         }
     }
 

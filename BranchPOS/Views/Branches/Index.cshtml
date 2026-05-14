@@ -21,7 +21,15 @@
             <td>@branch.Address</td>
             <td>@branch.Phone</td>
             <td>@(branch.IsActive ? "Active" : "Inactive")</td>
-            <td><a asp-action="Edit" asp-route-id="@branch.Id">Edit</a></td>
+            <td class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@branch.Id">Edit</a>
+                <form asp-action="ToggleActive" method="post">
+                    <input type="hidden" name="id" value="@branch.Id" />
+                    <button class="btn btn-sm @(branch.IsActive ? "btn-outline-warning" : "btn-outline-success")" type="submit">
+                        @(branch.IsActive ? "Deactivate" : "Activate")
+                    </button>
+                </form>
+            </td>
         </tr>
     }
     </tbody>

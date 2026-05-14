@@ -55,7 +55,8 @@
                     <td>@terminal.Branch?.Name</td>
                     <td>@terminal.IpAddress</td>
                     <td>@(terminal.IsActive ? "Active" : "Inactive")</td>
-                    <td>
+                    <td class="d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@terminal.Id">Edit</a>
                         <form asp-action="Toggle" method="post">
                             <input type="hidden" name="id" value="@terminal.Id" />
                             <button class="btn btn-sm btn-outline-secondary" type="submit">@(terminal.IsActive ? "Deactivate" : "Activate")</button>

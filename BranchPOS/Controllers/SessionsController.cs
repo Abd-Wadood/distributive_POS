@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Services;
 using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -14,14 +15,17 @@ public class SessionsController : Controller
     private readonly IBranchService _branchService;
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
+    private readonly IErrorLoggingService _errorLoggingService;
 
-    public SessionsController(IBranchService branchService, IUserSessionService userSessionService, ITerminalContextService terminalContextService)
+    public SessionsController(IBranchService branchService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService)
     {
         _branchService = branchService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
+        _errorLoggingService = errorLoggingService;
     }
 
+    [Authorize(Roles = "Cashier,StockManager")]
     public async Task<IActionResult> Index()
     {
         await _userSessionService.MarkInterruptedSessionsAsync();
@@ -50,7 +54,7 @@ public class SessionsController : Controller
         });
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
     public async Task<IActionResult> Start(SessionStartViewModel model)
     {
         var userId = GetUserId();
@@ -77,19 +81,20 @@ public class SessionsController : Controller
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            TempData["Error"] = ToUserMessage(ex);
             return RedirectToAction(nameof(Index));
         }
         catch (UnauthorizedAccessException ex)
         {
-            TempData["Error"] = ex.Message;
+            _errorLoggingService.LogException(HttpContext, ex, "You do not have permission to start a session for this branch.");
+            TempData["Error"] = "You do not have permission to start a session for this branch.";
             return RedirectToAction(nameof(Index));
         }
 
         return RedirectToAction("Index", "Home");
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
     public async Task<IActionResult> Continue(int sessionId)
     {
         try
@@ -100,17 +105,18 @@ public class SessionsController : Controller
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            TempData["Error"] = ToUserMessage(ex);
             return RedirectToAction(nameof(Index));
         }
         catch (UnauthorizedAccessException ex)
         {
-            TempData["Error"] = ex.Message;
+            _errorLoggingService.LogException(HttpContext, ex, "You do not have permission to resume this session.");
+            TempData["Error"] = "You do not have permission to resume this session.";
             return RedirectToAction(nameof(Index));
         }
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
     public async Task<IActionResult> End(int sessionId)
     {
         try
@@ -127,12 +133,13 @@ public class SessionsController : Controller
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            TempData["Error"] = ToUserMessage(ex);
             return RedirectToAction(nameof(Index));
         }
         catch (UnauthorizedAccessException ex)
         {
-            TempData["Error"] = ex.Message;
+            _errorLoggingService.LogException(HttpContext, ex, "You do not have permission to end this session.");
+            TempData["Error"] = "You do not have permission to end this session.";
             return RedirectToAction(nameof(Index));
         }
     }
@@ -143,7 +150,7 @@ public class SessionsController : Controller
         return View(await _userSessionService.GetSessionSummaryAsync(id));
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
     public async Task<IActionResult> Heartbeat(int sessionId, string terminalName)
     {
         await _userSessionService.HeartbeatAsync(sessionId, terminalName);
@@ -153,4 +160,11 @@ public class SessionsController : Controller
 
     private string GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Authenticated user was not found.");
+
+    private string ToUserMessage(InvalidOperationException ex)
+    {
+        var message = ex is BranchPosException branchPosException ? branchPosException.UserMessage : ex.Message;
+        _errorLoggingService.LogException(HttpContext, ex, message);
+        return message;
+    }
 }

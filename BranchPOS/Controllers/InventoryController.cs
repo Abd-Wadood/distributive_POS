@@ -1,4 +1,5 @@
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,23 +8,25 @@ using System.Security.Claims;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "Admin,StockManager")]
+[Authorize(Roles = "StockManager")]
 public class InventoryController : Controller
 {
     private readonly IInventoryService _inventoryService;
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
+    private readonly IErrorLoggingService _errorLoggingService;
 
-    public InventoryController(IInventoryService inventoryService, IUserSessionService userSessionService, ITerminalContextService terminalContextService)
+    public InventoryController(IInventoryService inventoryService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService)
     {
         _inventoryService = inventoryService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
+        _errorLoggingService = errorLoggingService;
     }
 
     public override void OnActionExecuting(ActionExecutingContext context)
     {
-        if (User.IsInRole("Cashier") && !User.IsInRole("Admin"))
+        if (!User.IsInRole("StockManager"))
         {
             context.Result = Forbid();
             return;
@@ -46,6 +49,11 @@ public class InventoryController : Controller
     {
         try
         {
+            if (!ModelState.IsValid)
+            {
+                throw new PosValidationException("Enter a valid adjustment quantity and try again.");
+            }
+
             var session = await _userSessionService.GetActiveSessionAsync(GetUserId());
             if (session is null)
             {
@@ -63,7 +71,9 @@ public class InventoryController : Controller
         }
         catch (InvalidOperationException ex)
         {
-            TempData["Error"] = ex.Message;
+            var message = ex is BranchPosException branchPosException ? branchPosException.UserMessage : ex.Message;
+            _errorLoggingService.LogException(HttpContext, ex, message);
+            TempData["Error"] = message;
         }
 
         return RedirectToAction(nameof(Index));

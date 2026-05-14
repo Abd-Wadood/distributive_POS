@@ -22,8 +22,8 @@
     }
 
     var isAdmin = User.IsInRole("Admin");
-    var isCashierOnly = User.IsInRole("Cashier") && !isAdmin;
-    var isStockManagerOnly = User.IsInRole("StockManager") && !isAdmin && !isCashierOnly;
+    var isCashier = User.IsInRole("Cashier") && !isAdmin;
+    var isStockManager = User.IsInRole("StockManager") && !isAdmin;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -52,27 +52,24 @@
                         </li>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <li class="nav-item"><a class="nav-link text-dark" asp-controller="Sessions" asp-action="Index">Session</a></li>
-                            @if (isAdmin || isStockManagerOnly)
+                            @if (!isAdmin)
+                            {
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Sessions" asp-action="Index">Session</a></li>
+                            }
+                            @if (isStockManager)
                             {
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Products" asp-action="Index">Products</a></li>
-                            }
-                            @if (isAdmin || isStockManagerOnly)
-                            {
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Ingredients" asp-action="Index">Ingredients</a></li>
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Inventory" asp-action="Index">Inventory</a></li>
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Purchases" asp-action="Index">Purchases</a></li>
                             }
-                            @if (isCashierOnly)
+                            @if (isCashier)
                             {
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Orders" asp-action="Create">Create Order</a></li>
                             }
                             @if (isAdmin)
                             {
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Orders" asp-action="Index">Orders</a></li>
-                            }
-                            @if (isAdmin)
-                            {
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Home" asp-action="Index">Dashboard</a></li>
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Users" asp-action="Index">Users</a></li>
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Branches" asp-action="Index">Branches</a></li>
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Categories" asp-action="Index">Categories</a></li>
@@ -113,6 +110,7 @@
     </header>
     <div class="container">
         <main role="main" class="pb-3">
+            <partial name="_UserMessages" />
             @RenderBody()
         </main>
     </div>

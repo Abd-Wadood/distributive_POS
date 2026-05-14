@@ -111,11 +111,16 @@ public class UsersController : Controller
 
         ViewBag.Roles = await _roleManager.Roles.OrderBy(x => x.Name).Select(x => new SelectListItem(x.Name!, x.Name!)).ToListAsync();
         ViewBag.UserRoles = await _userManager.GetRolesAsync(user);
+        ViewBag.Branches = await _context.Branches
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Name)
+            .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == user.BranchId))
+            .ToListAsync();
         return View(user);
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AssignRole(string id, string role)
+    public async Task<IActionResult> AssignRole(string id, string role, int? branchId)
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user is null)
@@ -128,14 +133,38 @@ public class UsersController : Controller
             return BadRequest();
         }
 
+        if ((role == "Cashier" || role == "StockManager") && !branchId.HasValue)
+        {
+            ModelState.AddModelError(nameof(branchId), "Cashiers and stock managers must be assigned to a branch.");
+        }
+
+        if (branchId.HasValue && !await _context.Branches.AnyAsync(x => x.Id == branchId.Value && x.IsActive))
+        {
+            ModelState.AddModelError(nameof(branchId), "Selected branch is not active.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            ViewBag.Roles = await _roleManager.Roles.OrderBy(x => x.Name).Select(x => new SelectListItem(x.Name!, x.Name!, x.Name == role)).ToListAsync();
+            ViewBag.UserRoles = await _userManager.GetRolesAsync(user);
+            ViewBag.Branches = await _context.Branches
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == branchId))
+                .ToListAsync();
+            return View(user);
+        }
+
         var existingRoles = await _userManager.GetRolesAsync(user);
         if (existingRoles.Count > 0)
         {
             await _userManager.RemoveFromRolesAsync(user, existingRoles);
         }
 
+        user.BranchId = branchId;
+        await _userManager.UpdateAsync(user);
         await _userManager.AddToRoleAsync(user, role);
-        TempData["Message"] = "User role updated. Ask the user to log out and sign in again.";
+        TempData["Message"] = "User role and branch assignment updated. Ask the user to log out and sign in again.";
         return RedirectToAction(nameof(Index));
     }
 

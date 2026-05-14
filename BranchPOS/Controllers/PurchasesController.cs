@@ -1,5 +1,6 @@
 using BranchPOS.Data;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using BranchPOS.Services;
 using BranchPOS.ViewModels;
@@ -12,25 +13,27 @@ using System.Security.Claims;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "Admin,StockManager")]
+[Authorize(Roles = "StockManager")]
 public class PurchasesController : Controller
 {
     private readonly AppDbContext _context;
     private readonly IPurchaseService _purchaseService;
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
+    private readonly IErrorLoggingService _errorLoggingService;
 
-    public PurchasesController(AppDbContext context, IPurchaseService purchaseService, IUserSessionService userSessionService, ITerminalContextService terminalContextService)
+    public PurchasesController(AppDbContext context, IPurchaseService purchaseService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService)
     {
         _context = context;
         _purchaseService = purchaseService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
+        _errorLoggingService = errorLoggingService;
     }
 
     public override void OnActionExecuting(ActionExecutingContext context)
     {
-        if (User.IsInRole("Cashier") && !User.IsInRole("Admin"))
+        if (!User.IsInRole("StockManager"))
         {
             context.Result = Forbid();
             return;
@@ -91,7 +94,9 @@ public class PurchasesController : Controller
         }
         catch (InvalidOperationException ex)
         {
-            ModelState.AddModelError(string.Empty, ex.Message);
+            var message = ex is BranchPosException branchPosException ? branchPosException.UserMessage : ex.Message;
+            _errorLoggingService.LogException(HttpContext, ex, message);
+            ModelState.AddModelError(string.Empty, message);
             return View(await BuildModelAsync(model, session.BranchId));
         }
     }

@@ -1,5 +1,6 @@
 using BranchPOS.Data;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,27 +32,27 @@ public class InventoryService : IInventoryService
     {
         if (dto.BranchId <= 0 || dto.UserSessionId <= 0 || string.IsNullOrWhiteSpace(dto.PerformedByUserId))
         {
-            throw new InvalidOperationException("Active stock session is required for inventory adjustments.");
+            throw new BusinessException("Start or continue an active stock session before adjusting inventory.");
         }
 
         if (dto.TerminalId <= 0 || string.IsNullOrWhiteSpace(dto.TerminalCode))
         {
-            throw new InvalidOperationException("Terminal is not registered.");
+            throw new BusinessException("Terminal is not registered. Register this terminal before adjusting stock.");
         }
 
         if (dto.IngredientId <= 0)
         {
-            throw new InvalidOperationException("Selected ingredient is invalid.");
+            throw new PosValidationException("Selected ingredient is invalid.");
         }
 
         if (dto.QuantityChanged == 0)
         {
-            throw new InvalidOperationException("Adjustment quantity cannot be zero.");
+            throw new PosValidationException("Adjustment quantity cannot be zero.");
         }
 
         if (Math.Abs(dto.QuantityChanged) > MaxInventoryMovementQuantity)
         {
-            throw new InvalidOperationException("Adjustment quantity is too large.");
+            throw new PosValidationException("Adjustment quantity is too large.");
         }
 
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
@@ -62,7 +63,7 @@ public class InventoryService : IInventoryService
             x.BranchId == dto.BranchId, cancellationToken);
         if (!ingredientExists)
         {
-            throw new InvalidOperationException("Selected ingredient does not belong to the active branch session.");
+            throw new BusinessException("Selected ingredient does not belong to the active branch session.");
         }
 
         var inventory = await _context.Inventories
@@ -77,7 +78,7 @@ public class InventoryService : IInventoryService
 
         if (inventory.CurrentQuantity + dto.QuantityChanged < 0)
         {
-            throw new InvalidOperationException("Adjustment would make stock negative.");
+            throw new BusinessException("Adjustment would make stock negative.");
         }
 
         inventory.CurrentQuantity += dto.QuantityChanged;
@@ -104,18 +105,17 @@ public class InventoryService : IInventoryService
             x.UserId == dto.PerformedByUserId &&
             x.BranchId == dto.BranchId &&
             x.Status == SessionStatus.Active, cancellationToken)
-            ?? throw new InvalidOperationException("Active stock session is required for inventory adjustments.");
+            ?? throw new BusinessException("Start or continue an active stock session before adjusting inventory.");
 
-        if (!string.Equals(session.RoleName, "StockManager", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(session.RoleName, "Admin", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(session.RoleName, "StockManager", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Active stock session is required for inventory adjustments.");
+            throw new BusinessException("Active stock session is required for inventory adjustments.");
         }
 
         if (session.TerminalId != dto.TerminalId ||
             !string.Equals(session.TerminalCode, dto.TerminalCode, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Terminal does not match the active stock session.");
+            throw new BusinessException("Terminal does not match the active stock session. Resume the correct session and try again.");
         }
 
         var terminalIsActive = await _context.Terminals.AnyAsync(x =>
@@ -126,7 +126,7 @@ public class InventoryService : IInventoryService
 
         if (!terminalIsActive)
         {
-            throw new InvalidOperationException("Terminal is not registered or is inactive.");
+            throw new BusinessException("Terminal is not registered or is inactive. Register this terminal or contact an administrator.");
         }
     }
 }

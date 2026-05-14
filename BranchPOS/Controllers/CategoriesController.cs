@@ -83,4 +83,26 @@ public class CategoriesController : Controller
         await _context.SaveChangesAsync();
         return RedirectToAction(nameof(Index));
     }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var category = await _context.Categories.FirstOrDefaultAsync(x => x.Id == id);
+        if (category is null)
+        {
+            return NotFound();
+        }
+
+        var hasProducts = await _context.Products.AnyAsync(x => x.CategoryId == id);
+        if (hasProducts)
+        {
+            TempData["Error"] = "Category is used by products and cannot be deleted.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        _context.Categories.Remove(category);
+        await _context.SaveChangesAsync();
+        TempData["Message"] = "Category deleted.";
+        return RedirectToAction(nameof(Index));
+    }
 }

@@ -1,5 +1,6 @@
 using BranchPOS.Data;
 using BranchPOS.DTOs;
+using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -34,22 +35,22 @@ public class PurchaseService : IPurchaseService
     {
         if (dto.BranchId <= 0 || dto.UserSessionId <= 0 || string.IsNullOrWhiteSpace(dto.PerformedByUserId))
         {
-            throw new InvalidOperationException("Active stock session is required for purchases.");
+            throw new BusinessException("Start or continue an active stock session before creating purchases.");
         }
 
         if (dto.TerminalId <= 0 || string.IsNullOrWhiteSpace(dto.TerminalCode))
         {
-            throw new InvalidOperationException("Terminal is not registered.");
+            throw new BusinessException("Terminal is not registered. Register this terminal before creating purchases.");
         }
 
         if (dto.Items.Count == 0 || dto.Items.Any(x => x.IngredientId <= 0 || x.Quantity <= 0 || x.UnitCost < 0))
         {
-            throw new InvalidOperationException("Purchase must contain valid item quantities and costs.");
+            throw new PosValidationException("Purchase must contain valid item quantities and costs.");
         }
 
         if (dto.Items.Any(x => x.Quantity > MaxPurchaseItemQuantity))
         {
-            throw new InvalidOperationException("Purchase quantity is too large.");
+            throw new PosValidationException("Purchase quantity is too large.");
         }
 
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
@@ -63,7 +64,7 @@ public class PurchaseService : IPurchaseService
 
         if (validIngredientIds.Count != ingredientIds.Count)
         {
-            throw new InvalidOperationException("Selected ingredient does not belong to the active branch session.");
+            throw new BusinessException("Selected ingredient does not belong to the active branch session.");
         }
 
         var purchase = new Purchase
@@ -127,7 +128,7 @@ public class PurchaseService : IPurchaseService
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            throw new InvalidOperationException("Inventory was already created for one of the selected ingredients. Refresh the page and try again.", ex);
+            throw new BusinessException("Inventory was already created for one of the selected ingredients. Refresh the page and try again.", innerException: ex);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -141,18 +142,17 @@ public class PurchaseService : IPurchaseService
             x.UserId == dto.PerformedByUserId &&
             x.BranchId == dto.BranchId &&
             x.Status == SessionStatus.Active, cancellationToken)
-            ?? throw new InvalidOperationException("Active stock session is required for purchases.");
+            ?? throw new BusinessException("Start or continue an active stock session before creating purchases.");
 
-        if (!string.Equals(session.RoleName, "StockManager", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(session.RoleName, "Admin", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(session.RoleName, "StockManager", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Active stock session is required for purchases.");
+            throw new BusinessException("Active stock session is required for purchases.");
         }
 
         if (session.TerminalId != dto.TerminalId ||
             !string.Equals(session.TerminalCode, dto.TerminalCode, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Terminal does not match the active stock session.");
+            throw new BusinessException("Terminal does not match the active stock session. Resume the correct session and try again.");
         }
 
         var terminalIsActive = await _context.Terminals.AnyAsync(x =>
@@ -163,7 +163,7 @@ public class PurchaseService : IPurchaseService
 
         if (!terminalIsActive)
         {
-            throw new InvalidOperationException("Terminal is not registered or is inactive.");
+            throw new BusinessException("Terminal is not registered or is inactive. Register this terminal or contact an administrator.");
         }
     }
 

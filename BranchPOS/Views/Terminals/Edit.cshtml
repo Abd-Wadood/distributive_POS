@@ -1,0 +1,47 @@
+@model BranchPOS.ViewModels.TerminalEditViewModel
+@{
+    ViewData["Title"] = "Edit Terminal";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Edit Terminal</h1>
+    <a class="btn btn-outline-secondary" asp-action="Index">Back to terminals</a>
+</div>
+
+<form asp-action="Edit" method="post" class="card">
+    <div class="card-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <input type="hidden" asp-for="Id" />
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label asp-for="TerminalCode" class="form-label"></label>
+                <input asp-for="TerminalCode" class="form-control" />
+                <span asp-validation-for="TerminalCode" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="BranchId" class="form-label"></label>
+                <select asp-for="BranchId" asp-items="Model.Branches" class="form-select"></select>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="IpAddress" class="form-label"></label>
+                <input asp-for="IpAddress" class="form-control" />
+            </div>
+            <div class="col-12">
+                <div class="form-check">
+                    <input asp-for="IsActive" class="form-check-input" />
+                    <label asp-for="IsActive" class="form-check-label">Active terminal</label>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-primary mt-3" type="submit">Save terminal</button>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
