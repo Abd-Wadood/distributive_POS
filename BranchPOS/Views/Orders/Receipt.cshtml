@@ -1,0 +1,60 @@
+@model BranchPOS.Models.Order
+@{
+    ViewData["Title"] = "Receipt";
+}
+
+<div class="receipt mx-auto">
+    <div class="text-center mb-3">
+        <h2>BranchPOS</h2>
+        <div>Order @Model.OrderNumber</div>
+        <div>@(Model.CompletedAt ?? Model.CreatedAt).ToLocalTime()</div>
+    </div>
+
+    <dl class="row small">
+        <dt class="col-4">Cashier</dt>
+        <dd class="col-8">@Model.Cashier?.Email</dd>
+        <dt class="col-4">Type</dt>
+        <dd class="col-8">@Model.OrderType</dd>
+        @if (Model.Customer is not null)
+        {
+            <dt class="col-4">Customer</dt>
+            <dd class="col-8">@Model.Customer.Name</dd>
+            <dt class="col-4">Phone</dt>
+            <dd class="col-8">@Model.Customer.PhoneNumber</dd>
+            <dt class="col-4">Address</dt>
+            <dd class="col-8">@Model.Customer.Address</dd>
+        }
+    </dl>
+
+    <table class="table table-sm">
+        <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Total</th></tr></thead>
+        <tbody>
+        @foreach (var item in Model.Items)
+        {
+            <tr>
+                <td>
+                    @item.ProductNameSnapshot
+                    <div class="text-muted small">@item.UnitPrice.ToString("0.00") each</div>
+                </td>
+                <td class="text-end">@item.Quantity</td>
+                <td class="text-end">@item.LineTotal.ToString("0.00")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <div class="d-flex justify-content-between"><span>Subtotal</span><strong>@Model.Subtotal.ToString("0.00")</strong></div>
+    <div class="d-flex justify-content-between"><span>Discount</span><strong>@Model.DiscountAmount.ToString("0.00")</strong></div>
+    <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><span>Total</span><strong>@Model.TotalAmount.ToString("0.00")</strong></div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Notes))
+    {
+        <p class="small mt-3">@Model.Notes</p>
+    }
+
+    <div class="d-print-none mt-3 d-flex gap-2">
+        <button class="btn btn-primary" onclick="window.print()">Print</button>
+        <a class="btn btn-secondary" asp-action="Create">New order</a>
+        <a class="btn btn-outline-secondary" asp-action="Index">Orders</a>
+    </div>
+</div>

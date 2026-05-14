@@ -1,0 +1,41 @@
+@model BranchPOS.ViewModels.ProductEditViewModel
+
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <input asp-for="Id" type="hidden" />
+    <div class="mb-3">
+        <label asp-for="Name" class="form-label"></label>
+        <input asp-for="Name" class="form-control" />
+        <span asp-validation-for="Name" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Price" class="form-label"></label>
+        <input asp-for="Price" class="form-control" />
+        <span asp-validation-for="Price" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="CategoryId" class="form-label"></label>
+        <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select"></select>
+    </div>
+    <h3>Recipe ingredients</h3>
+    <table class="table">
+        <thead><tr><th>Ingredient</th><th>Unit</th><th>Quantity required per product</th></tr></thead>
+        <tbody>
+        @for (var i = 0; i < Model.Ingredients.Count; i++)
+        {
+            <tr>
+                <td>
+                    @Model.Ingredients[i].Name
+                    <input asp-for="Ingredients[i].IngredientId" type="hidden" />
+                    <input asp-for="Ingredients[i].Name" type="hidden" />
+                    <input asp-for="Ingredients[i].UnitType" type="hidden" />
+                </td>
+                <td>@Model.Ingredients[i].UnitType</td>
+                <td><input asp-for="Ingredients[i].QuantityRequired" class="form-control" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>

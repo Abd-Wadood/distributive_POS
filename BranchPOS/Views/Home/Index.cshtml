@@ -1,0 +1,33 @@
+@{
+    ViewData["Title"] = "Branch Operations";
+    var isAdmin = User.IsInRole("Admin");
+    var isCashierOnly = User.IsInRole("Cashier") && !isAdmin;
+    var isStockManagerOnly = User.IsInRole("StockManager") && !isAdmin && !isCashierOnly;
+}
+
+<h1>Branch POS</h1>
+<p>Offline-first branch server for products, ingredient inventory, purchases, and orders.</p>
+
+@if (User.Identity?.IsAuthenticated != true)
+{
+    <a class="btn btn-primary" asp-controller="Account" asp-action="Login">Login</a>
+}
+else
+{
+    <div class="list-group">
+        @if (isCashierOnly)
+        {
+            <a class="list-group-item list-group-item-action" asp-controller="Orders" asp-action="Create">Create order</a>
+        }
+        @if (isAdmin || isStockManagerOnly)
+        {
+            <a class="list-group-item list-group-item-action" asp-controller="Products" asp-action="Index">Products</a>
+            <a class="list-group-item list-group-item-action" asp-controller="Inventory" asp-action="Index">Inventory</a>
+        }
+        @if (isAdmin)
+        {
+            <a class="list-group-item list-group-item-action" asp-controller="Orders" asp-action="Index">Orders</a>
+            <a class="list-group-item list-group-item-action" asp-controller="Users" asp-action="Index">Users</a>
+        }
+    </div>
+}

@@ -1,0 +1,28 @@
+@model IEnumerable<BranchPOS.Models.Branch>
+@{
+    ViewData["Title"] = "Branches";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Branches</h1>
+    <a class="btn btn-primary" asp-action="Create">New branch</a>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr><th>Code</th><th>Name</th><th>Address</th><th>Phone</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+    @foreach (var branch in Model)
+    {
+        <tr>
+            <td>@branch.BranchCode</td>
+            <td>@branch.Name</td>
+            <td>@branch.Address</td>
+            <td>@branch.Phone</td>
+            <td>@(branch.IsActive ? "Active" : "Inactive")</td>
+            <td><a asp-action="Edit" asp-route-id="@branch.Id">Edit</a></td>
+        </tr>
+    }
+    </tbody>
+</table>

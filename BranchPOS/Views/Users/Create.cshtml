@@ -1,0 +1,58 @@
+@model BranchPOS.ViewModels.UserCreateViewModel
+@{
+    ViewData["Title"] = "New user";
+}
+
+<h1>New user</h1>
+<form method="post" class="col-md-5">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="FullName" class="form-label"></label>
+        <input asp-for="FullName" class="form-control" />
+        <span asp-validation-for="FullName" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Password" class="form-label"></label>
+        <input asp-for="Password" class="form-control" />
+        <span asp-validation-for="Password" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Role" class="form-label"></label>
+        <select asp-for="Role" asp-items="Model.Roles" class="form-select" id="roleSelect"></select>
+        <span asp-validation-for="Role" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="BranchId" class="form-label">Assigned branch</label>
+        <select asp-for="BranchId" asp-items="Model.Branches" class="form-select">
+            <option value="">All branches / Admin only</option>
+        </select>
+        <span asp-validation-for="BranchId" class="text-danger"></span>
+        <div class="form-text">Cashiers and stock managers must be assigned to one branch. Admin can be left unassigned for all-branch access.</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Create</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        const roleSelect = document.getElementById('roleSelect');
+        const branchSelect = document.getElementById('BranchId');
+
+        function syncBranchRequirement() {
+            const requiresBranch = roleSelect.value === 'Cashier' || roleSelect.value === 'StockManager';
+            branchSelect.required = requiresBranch;
+            branchSelect.closest('.mb-3').querySelector('.form-text').textContent = requiresBranch
+                ? 'Required: this role belongs to exactly one branch.'
+                : 'Optional: leave empty for all-branch Admin access.';
+        }
+
+        roleSelect.addEventListener('change', syncBranchRequirement);
+        syncBranchRequirement();
+    </script>
+}

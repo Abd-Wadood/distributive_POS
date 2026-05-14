@@ -1,0 +1,99 @@
+@model BranchPOS.ViewModels.TerminalAdminViewModel
+@{
+    ViewData["Title"] = "Terminals";
+}
+
+<h1>Terminals</h1>
+
+<form asp-action="Create" method="post" class="card mb-4">
+    <div class="card-body">
+        <h5>Add terminal</h5>
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label asp-for="NewTerminal.TerminalCode" class="form-label"></label>
+                <input asp-for="NewTerminal.TerminalCode" class="form-control" />
+                <span asp-validation-for="NewTerminal.TerminalCode" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="NewTerminal.BranchId" class="form-label"></label>
+                <select asp-for="NewTerminal.BranchId" asp-items="Model.NewTerminal.Branches" class="form-select"></select>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="NewTerminal.Name" class="form-label"></label>
+                <input asp-for="NewTerminal.Name" class="form-control" />
+                <span asp-validation-for="NewTerminal.Name" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="NewTerminal.IpAddress" class="form-label"></label>
+                <input asp-for="NewTerminal.IpAddress" class="form-control" />
+            </div>
+        </div>
+        <button class="btn btn-primary mt-3" type="submit">Add terminal</button>
+    </div>
+</form>
+
+<h2 class="h4">Registered terminals</h2>
+<div class="table-responsive mb-4">
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Branch</th>
+                <th>IP</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var terminal in Model.Terminals)
+            {
+                <tr>
+                    <td>@terminal.TerminalCode</td>
+                    <td>@terminal.Name</td>
+                    <td>@terminal.Branch?.Name</td>
+                    <td>@terminal.IpAddress</td>
+                    <td>@(terminal.IsActive ? "Active" : "Inactive")</td>
+                    <td>
+                        <form asp-action="Toggle" method="post">
+                            <input type="hidden" name="id" value="@terminal.Id" />
+                            <button class="btn btn-sm btn-outline-secondary" type="submit">@(terminal.IsActive ? "Deactivate" : "Activate")</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<h2 class="h4">Terminal heartbeat</h2>
+<div class="table-responsive">
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Branch</th>
+                <th>Last seen</th>
+                <th>User</th>
+                <th>Session</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var heartbeat in Model.Heartbeats)
+            {
+                <tr>
+                    <td>@heartbeat.TerminalCode</td>
+                    <td>@heartbeat.Branch?.Name</td>
+                    <td>@heartbeat.LastSeenAt.ToLocalTime()</td>
+                    <td>@heartbeat.CurrentUser?.Email</td>
+                    <td>@heartbeat.CurrentSession?.SessionCode</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

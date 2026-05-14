@@ -1,0 +1,46 @@
+@model IEnumerable<BranchPOS.ViewModels.UserListItemViewModel>
+@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Users</h1>
+    <a class="btn btn-primary" asp-action="Create">New user</a>
+</div>
+@if (TempData["Message"] is not null)
+{
+    <div class="alert alert-success">@TempData["Message"]</div>
+}
+@if (TempData["Error"] is not null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+<table class="table table-striped">
+    <thead><tr><th>Name</th><th>Email</th><th>User name</th><th>Role</th><th>Branch</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var user in Model)
+    {
+        <tr>
+            <td>@user.FullName</td>
+            <td>@user.Email</td>
+            <td>@user.UserName</td>
+            <td>@user.Roles</td>
+            <td>@user.BranchName</td>
+            <td>@(user.IsActive ? "Active" : "Inactive")</td>
+            <td class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="AssignRole" asp-route-id="@user.Id">Role</a>
+                <form asp-action="ToggleActive" method="post">
+                    <input type="hidden" name="id" value="@user.Id" />
+                    <button class="btn btn-sm @(user.IsActive ? "btn-outline-warning" : "btn-outline-success")" type="submit">
+                        @(user.IsActive ? "Deactivate" : "Activate")
+                    </button>
+                </form>
+                <form asp-action="Delete" method="post" onsubmit="return confirm('Delete this user? Users with history will be deactivated instead.');">
+                    <input type="hidden" name="id" value="@user.Id" />
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

@@ -1,0 +1,25 @@
+@model BranchPOS.ViewModels.SessionSummaryViewModel
+@{
+    ViewData["Title"] = "Session summary";
+}
+
+<h1>Session summary</h1>
+<dl class="row">
+    <dt class="col-sm-3">Session</dt><dd class="col-sm-9">@Model.Session.SessionCode</dd>
+    <dt class="col-sm-3">Branch</dt><dd class="col-sm-9">@Model.Session.Branch?.Name</dd>
+    <dt class="col-sm-3">User</dt><dd class="col-sm-9">@Model.Session.User?.Email</dd>
+    <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@Model.Session.Status</dd>
+    <dt class="col-sm-3">Started</dt><dd class="col-sm-9">@Model.Session.StartedAt.ToLocalTime()</dd>
+    <dt class="col-sm-3">Ended</dt><dd class="col-sm-9">@Model.Session.EndedAt?.ToLocalTime()</dd>
+</dl>
+
+<div class="row g-3">
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Completed orders</h6><strong>@Model.CompletedOrdersCount</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Total sales</h6><strong>@Model.TotalSalesAmount.ToString("0.00")</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Cancelled orders</h6><strong>@Model.CancelledOrdersCount</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Draft orders</h6><strong>@Model.ActiveDraftOrdersCount</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Purchases</h6><strong>@Model.PurchasesCount</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Purchase total</h6><strong>@Model.TotalPurchaseAmount.ToString("0.00")</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Adjustments</h6><strong>@Model.InventoryAdjustmentsCount</strong></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Low stock warnings</h6><strong>@Model.LowStockWarnings</strong></div></div></div>
+</div>

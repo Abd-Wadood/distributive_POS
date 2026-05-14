@@ -1,0 +1,24 @@
+@model IEnumerable<BranchPOS.Models.Purchase>
+@{
+    ViewData["Title"] = "Purchases";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Purchases</h1>
+    <a class="btn btn-primary" asp-action="Create">New purchase</a>
+</div>
+
+<table class="table table-striped">
+    <thead><tr><th>Id</th><th>Supplier</th><th>Date</th><th>Items</th></tr></thead>
+    <tbody>
+    @foreach (var purchase in Model)
+    {
+        <tr>
+            <td>@purchase.Id</td>
+            <td>@purchase.Supplier?.Name</td>
+            <td>@purchase.CreatedAt.ToLocalTime()</td>
+            <td>@string.Join(", ", purchase.Items.Select(x => $"{x.Ingredient?.Name}: {x.Quantity:0.###}"))</td>
+        </tr>
+    }
+    </tbody>
+</table>

@@ -1,0 +1,479 @@
+@model BranchPOS.ViewModels.PosOrderViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "POS Order";
+    var productsJson = JsonSerializer.Serialize(Model.Products);
+    var draftsJson = JsonSerializer.Serialize(Model.DraftOrders);
+}
+
+<div class="pos-screen">
+    @Html.AntiForgeryToken()
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="mb-0">POS Order</h1>
+            <small class="text-muted">Completed sales deduct ingredient inventory. Drafts do not.</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button id="newOrderBtn" type="button" class="btn btn-outline-primary">New order</button>
+            <button id="holdOrderBtn" type="button" class="btn btn-outline-secondary">Hold</button>
+            <button id="cancelOrderBtn" type="button" class="btn btn-outline-danger">Cancel</button>
+        </div>
+    </div>
+
+    <ul id="orderTabs" class="nav nav-tabs mb-3"></ul>
+
+    <div id="messageBox" class="alert d-none"></div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label" for="orderType">Order type</label>
+                            <select id="orderType" class="form-select">
+                                <option value="DineIn">Dine in</option>
+                                <option value="Takeaway" selected>Takeaway</option>
+                                <option value="Delivery">Delivery</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="tableNumber">Table</label>
+                            <input id="tableNumber" class="form-control" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="customerPhone">Phone</label>
+                            <input id="customerPhone" class="form-control" autocomplete="off" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="customerName">Customer</label>
+                            <input id="customerName" class="form-control" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="customerAddress">Address</label>
+                            <input id="customerAddress" class="form-control" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="orderNotes">Notes</label>
+                            <input id="orderNotes" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <input id="productSearch" class="form-control pos-search" placeholder="Search products" />
+                <button type="button" class="btn btn-primary category-filter" data-category-id="all">All</button>
+                @foreach (var category in Model.Categories)
+                {
+                    <button type="button" class="btn btn-outline-primary category-filter" data-category-id="@category.Id">@category.Name</button>
+                }
+            </div>
+
+            <div id="productGrid" class="pos-product-grid"></div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card pos-cart">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Cart</strong>
+                    <span id="cartCount" class="badge text-bg-secondary">0</span>
+                </div>
+                <div class="card-body">
+                    <div id="cartItems" class="pos-cart-items"></div>
+                    <hr />
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal</span>
+                        <strong id="subtotalText">0.00</strong>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" for="discountAmount">Discount</label>
+                        <input id="discountAmount" class="form-control" type="number" min="0" step="0.01" value="0" />
+                    </div>
+                    <div class="d-flex justify-content-between fs-5 mb-3">
+                        <span>Total</span>
+                        <strong id="totalText">0.00</strong>
+                    </div>
+                    <button id="finalizeOrderBtn" type="button" class="btn btn-success w-100">Finalize sale</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const products = @Html.Raw(productsJson);
+const draftOrders = @Html.Raw(draftsJson);
+const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+let orders = [];
+let activeOrderId = null;
+let selectedCategoryId = 'all';
+let searchTerm = '';
+let autosaveTimer = null;
+
+function newLocalId() {
+    if (window.crypto?.randomUUID) {
+        return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function makeOrder(seed) {
+    const id = seed?.Id ? `db-${seed.Id}` : `local-${newLocalId()}`;
+    return {
+        id,
+        draftOrderId: seed?.Id ?? null,
+        label: seed?.OrderNumber ?? `Order ${orders.length + 1}`,
+        orderType: seed?.OrderType ?? 'Takeaway',
+        discountAmount: seed?.DiscountAmount ?? 0,
+        tableNumber: seed?.TableNumber ?? '',
+        notes: seed?.Notes ?? '',
+        customer: {
+            phoneNumber: seed?.CustomerPhone ?? '',
+            name: seed?.CustomerName ?? '',
+            address: seed?.CustomerAddress ?? ''
+        },
+        items: Object.fromEntries((seed?.Items ?? []).map(item => [item.ProductId, item.Quantity]))
+    };
+}
+
+function activeOrder() {
+    return orders.find(order => order.id === activeOrderId);
+}
+
+function money(value) {
+    return Number(value || 0).toFixed(2);
+}
+
+function showMessage(message, type = 'danger') {
+    const box = document.getElementById('messageBox');
+    box.className = `alert alert-${type}`;
+    box.textContent = message;
+    box.classList.remove('d-none');
+    window.setTimeout(() => box.classList.add('d-none'), 5000);
+}
+
+function startNewOrder(seed) {
+    const order = makeOrder(seed);
+    orders.push(order);
+    activeOrderId = order.id;
+    renderAll();
+}
+
+function renderTabs() {
+    const tabs = document.getElementById('orderTabs');
+    tabs.innerHTML = '';
+    orders.forEach((order, index) => {
+        const item = document.createElement('li');
+        item.className = 'nav-item';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `nav-link ${order.id === activeOrderId ? 'active' : ''}`;
+        button.textContent = order.draftOrderId ? order.label : `Order ${index + 1}`;
+        button.addEventListener('click', () => {
+            saveFormToActive();
+            activeOrderId = order.id;
+            renderAll();
+        });
+        item.appendChild(button);
+        tabs.appendChild(item);
+    });
+}
+
+function renderProducts() {
+    const grid = document.getElementById('productGrid');
+    const order = activeOrder();
+    grid.innerHTML = '';
+
+    const visibleProducts = products
+        .filter(product => selectedCategoryId === 'all' || product.CategoryId.toString() === selectedCategoryId)
+        .filter(product => product.Name.toLowerCase().includes(searchTerm));
+
+    if (visibleProducts.length === 0) {
+        grid.innerHTML = '<div class="alert alert-warning mb-0">No products found for this branch or filter.</div>';
+        return;
+    }
+
+    visibleProducts.forEach(product => {
+            const quantity = order?.items[product.Id] ?? 0;
+            const card = document.createElement('div');
+            card.className = `card product-card ${product.IsAvailable ? '' : 'opacity-75'}`;
+            card.dataset.productId = product.Id;
+            card.dataset.available = product.IsAvailable ? 'true' : 'false';
+            card.innerHTML = `
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <h5 class="card-title mb-1">${product.Name}</h5>
+                            <div class="text-muted small">${product.CategoryName}</div>
+                        </div>
+                        <span class="badge ${product.IsAvailable ? 'text-bg-success' : 'text-bg-secondary'} align-self-start">
+                            ${product.IsAvailable ? 'Available' : 'Unavailable'}
+                        </span>
+                    </div>
+                    <div class="mt-3 mb-3 fs-5">${money(product.Price)}</div>
+                    <div class="mt-auto d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm qty-minus" data-product-id="${product.Id}" ${quantity === 0 ? 'disabled' : ''}>-</button>
+                        <input class="form-control form-control-sm product-qty" data-product-id="${product.Id}" value="${quantity}" type="number" min="0" ${product.IsAvailable ? '' : 'disabled'} />
+                    </div>
+                </div>`;
+            grid.appendChild(card);
+        });
+}
+
+function renderCart() {
+    const order = activeOrder();
+    const cart = document.getElementById('cartItems');
+    cart.innerHTML = '';
+    let subtotal = 0;
+    let count = 0;
+
+    Object.entries(order.items).forEach(([productId, quantity]) => {
+        if (quantity <= 0) return;
+        const product = products.find(p => p.Id === Number(productId));
+        if (!product) return;
+        const lineTotal = product.Price * quantity;
+        subtotal += lineTotal;
+        count += quantity;
+        const row = document.createElement('div');
+        row.className = 'cart-line';
+        row.innerHTML = `
+            <div>
+                <strong>${product.Name}</strong>
+                <div class="text-muted small">${money(product.Price)} each</div>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary cart-minus" data-product-id="${product.Id}">-</button>
+                <input class="form-control form-control-sm cart-qty" data-product-id="${product.Id}" value="${quantity}" type="number" min="0" />
+                <button type="button" class="btn btn-sm btn-outline-secondary cart-plus" data-product-id="${product.Id}">+</button>
+                <button type="button" class="btn btn-sm btn-outline-danger cart-remove" data-product-id="${product.Id}">x</button>
+            </div>
+            <strong>${money(lineTotal)}</strong>`;
+        cart.appendChild(row);
+    });
+
+    if (count === 0) {
+        cart.innerHTML = '<p class="text-muted mb-0">No items selected.</p>';
+    }
+
+    const discount = Math.max(0, Number(document.getElementById('discountAmount').value || 0));
+    document.getElementById('cartCount').textContent = count;
+    document.getElementById('subtotalText').textContent = money(subtotal);
+    document.getElementById('totalText').textContent = money(Math.max(0, subtotal - discount));
+}
+
+function loadOrderForm() {
+    const order = activeOrder();
+    document.getElementById('orderType').value = order.orderType;
+    document.getElementById('discountAmount').value = order.discountAmount;
+    document.getElementById('tableNumber').value = order.tableNumber;
+    document.getElementById('orderNotes').value = order.notes;
+    document.getElementById('customerPhone').value = order.customer.phoneNumber;
+    document.getElementById('customerName').value = order.customer.name;
+    document.getElementById('customerAddress').value = order.customer.address;
+}
+
+function saveFormToActive() {
+    const order = activeOrder();
+    if (!order) return;
+    order.orderType = document.getElementById('orderType').value;
+    order.discountAmount = Number(document.getElementById('discountAmount').value || 0);
+    order.tableNumber = document.getElementById('tableNumber').value;
+    order.notes = document.getElementById('orderNotes').value;
+    order.customer.phoneNumber = document.getElementById('customerPhone').value;
+    order.customer.name = document.getElementById('customerName').value;
+    order.customer.address = document.getElementById('customerAddress').value;
+}
+
+function renderAll() {
+    if (orders.length === 0) startNewOrder();
+    renderTabs();
+    loadOrderForm();
+    renderProducts();
+    renderCart();
+}
+
+function setQuantity(productId, quantity) {
+    const order = activeOrder();
+    const product = products.find(p => p.Id === Number(productId));
+    if (!product?.IsAvailable) return;
+    const normalized = Math.max(0, Number(quantity || 0));
+    if (normalized === 0) delete order.items[productId];
+    else order.items[productId] = normalized;
+    renderProducts();
+    renderCart();
+    scheduleAutosave();
+}
+
+function scheduleAutosave() {
+    window.clearTimeout(autosaveTimer);
+    autosaveTimer = window.setTimeout(async () => {
+        const order = activeOrder();
+        if (!order || Object.keys(order.items).length === 0) return;
+        try {
+            const data = await postJson('/Orders/SaveDraft', buildPayload());
+            order.draftOrderId = data.draft.orderId;
+            order.label = data.draft.orderNumber;
+            renderTabs();
+        } catch {
+            // Silent autosave failure; final submission still performs full server validation.
+        }
+    }, 800);
+}
+
+function buildPayload() {
+    saveFormToActive();
+    const order = activeOrder();
+    return {
+        draftOrderId: order.draftOrderId,
+        orderType: order.orderType,
+        discountAmount: order.discountAmount,
+        tableNumber: order.tableNumber,
+        notes: order.notes,
+        customer: order.customer,
+        items: Object.entries(order.items).map(([productId, quantity]) => ({ productId: Number(productId), quantity: Number(quantity) }))
+    };
+}
+
+async function postJson(url, payload) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'RequestVerificationToken': token
+        },
+        body: JSON.stringify(payload)
+    });
+    const contentType = response.headers.get('content-type') || '';
+    const data = contentType.includes('application/json')
+        ? await response.json()
+        : { success: false, message: (await response.text()).split('\n')[0] || 'Server returned an unexpected response.' };
+    if (!response.ok || data.success === false) {
+        throw new Error(data.message || 'Request failed.');
+    }
+    return data;
+}
+
+document.addEventListener('click', async event => {
+    const card = event.target.closest('.product-card');
+    const clickedControl = event.target.closest('button, input, select, textarea, a');
+    if (card && !clickedControl && card.dataset.available === 'true') {
+        const id = card.dataset.productId;
+        setQuantity(id, (activeOrder().items[id] || 0) + 1);
+        return;
+    }
+
+    const plus = event.target.closest('.cart-plus');
+    const minus = event.target.closest('.qty-minus, .cart-minus');
+    const remove = event.target.closest('.cart-remove');
+
+    if (plus) {
+        const id = plus.dataset.productId;
+        setQuantity(id, (activeOrder().items[id] || 0) + 1);
+    }
+    if (minus) {
+        const id = minus.dataset.productId;
+        setQuantity(id, (activeOrder().items[id] || 0) - 1);
+    }
+    if (remove) {
+        setQuantity(remove.dataset.productId, 0);
+    }
+});
+
+document.addEventListener('change', event => {
+    if (event.target.matches('.product-qty, .cart-qty')) {
+        setQuantity(event.target.dataset.productId, event.target.value);
+    }
+    if (event.target.id === 'discountAmount') {
+        saveFormToActive();
+        renderCart();
+        scheduleAutosave();
+    }
+});
+
+document.querySelectorAll('.category-filter').forEach(button => {
+    button.addEventListener('click', () => {
+        selectedCategoryId = button.dataset.categoryId;
+        document.querySelectorAll('.category-filter').forEach(x => x.classList.replace('btn-primary', 'btn-outline-primary'));
+        button.classList.remove('btn-outline-primary');
+        button.classList.add('btn-primary');
+        renderProducts();
+    });
+});
+
+document.getElementById('productSearch').addEventListener('input', event => {
+    searchTerm = event.target.value.toLowerCase().trim();
+    renderProducts();
+});
+
+document.getElementById('customerPhone').addEventListener('blur', async event => {
+    const phone = event.target.value.trim();
+    if (!phone) return;
+    const response = await fetch(`/Customers/Lookup?phone=${encodeURIComponent(phone)}`);
+    const data = await response.json();
+    if (data.found) {
+        document.getElementById('customerName').value = data.customer.name;
+        document.getElementById('customerAddress').value = data.customer.address || '';
+        saveFormToActive();
+        showMessage('Customer loaded.', 'success');
+    }
+});
+
+document.getElementById('newOrderBtn').addEventListener('click', () => {
+    saveFormToActive();
+    startNewOrder();
+});
+
+document.getElementById('holdOrderBtn').addEventListener('click', async () => {
+    try {
+        const data = await postJson('/Orders/SaveDraft', buildPayload());
+        const order = activeOrder();
+        order.draftOrderId = data.draft.orderId;
+        order.label = data.draft.orderNumber;
+        showMessage('Order held.', 'success');
+        renderTabs();
+    } catch (error) {
+        showMessage(error.message);
+    }
+});
+
+document.getElementById('cancelOrderBtn').addEventListener('click', async () => {
+    const order = activeOrder();
+    if (order.draftOrderId) {
+        try {
+            await postJson('/Orders/CancelDraft', { orderId: order.draftOrderId });
+        } catch (error) {
+            showMessage(error.message);
+            return;
+        }
+    }
+    orders = orders.filter(x => x.id !== activeOrderId);
+    activeOrderId = orders[0]?.id ?? null;
+    renderAll();
+});
+
+document.getElementById('finalizeOrderBtn').addEventListener('click', async () => {
+    try {
+        const data = await postJson('/Orders/Finalize', buildPayload());
+        window.location.href = data.receiptUrl;
+    } catch (error) {
+        showMessage(error.message);
+    }
+});
+
+['orderType', 'tableNumber', 'customerName', 'customerAddress', 'orderNotes'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+        saveFormToActive();
+        scheduleAutosave();
+    });
+});
+
+draftOrders.forEach(startNewOrder);
+if (orders.length === 0) startNewOrder();
+renderAll();
+</script>
+}

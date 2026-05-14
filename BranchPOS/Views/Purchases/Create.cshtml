@@ -1,0 +1,28 @@
+@model BranchPOS.ViewModels.PurchaseCreateViewModel
+@{
+    ViewData["Title"] = "New purchase";
+}
+
+<h1>New purchase</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3 col-md-4">
+        <label asp-for="SupplierId" class="form-label"></label>
+        <select asp-for="SupplierId" asp-items="Model.Suppliers" class="form-select"></select>
+    </div>
+    <table class="table">
+        <thead><tr><th>Ingredient</th><th>Quantity</th><th>Unit cost</th></tr></thead>
+        <tbody>
+        @for (var i = 0; i < Model.Items.Count; i++)
+        {
+            <tr>
+                <td><select asp-for="Items[i].IngredientId" asp-items="Model.Ingredients" class="form-select"></select></td>
+                <td><input asp-for="Items[i].Quantity" class="form-control" /></td>
+                <td><input asp-for="Items[i].UnitCost" class="form-control" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Save purchase</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>

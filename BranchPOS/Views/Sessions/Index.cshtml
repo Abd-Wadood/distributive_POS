@@ -1,0 +1,98 @@
+@model BranchPOS.ViewModels.SessionStartViewModel
+@{
+    ViewData["Title"] = "Session";
+    var canViewSummary = User.IsInRole("Admin");
+}
+
+<h1>Session</h1>
+@if (TempData["Error"] is not null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+@if (!Model.CanStartSession && Model.ActiveSession is null)
+{
+    <div class="alert alert-warning">
+        @Model.StartSessionBlockReason
+        <div class="mt-2">
+            Use a terminal code assigned to this user's branch, or edit the user's branch assignment from Admin > Users.
+        </div>
+    </div>
+}
+
+@if (Model.ActiveSession is not null)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5>Active session @Model.ActiveSession.SessionCode</h5>
+            <p class="mb-1">Branch: @Model.ActiveSession.Branch?.Name</p>
+            <p class="mb-1">Terminal: @Model.ActiveSession.TerminalName (@Model.ActiveSession.TerminalCode)</p>
+            <p class="mb-1">Started: @Model.ActiveSession.StartedAt.ToLocalTime()</p>
+            <div class="d-flex gap-2 mt-3">
+                <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Continue session</a>
+                @if (canViewSummary)
+                {
+                    <a class="btn btn-outline-secondary" asp-action="Summary" asp-route-id="@Model.ActiveSession.Id">View summary</a>
+                }
+            </div>
+            <form asp-action="End" method="post" class="mt-3 d-flex gap-2">
+                <input type="hidden" name="sessionId" value="@Model.ActiveSession.Id" />
+                <button class="btn btn-danger" type="submit">End session</button>
+            </form>
+        </div>
+    </div>
+}
+
+@if (Model.InterruptedSession is not null)
+{
+    <div class="card mb-3 border-warning">
+        <div class="card-body">
+            <h5>Interrupted session @Model.InterruptedSession.SessionCode</h5>
+            <p class="mb-1">Branch: @Model.InterruptedSession.Branch?.Name</p>
+            <form asp-action="Continue" method="post">
+                <input type="hidden" name="sessionId" value="@Model.InterruptedSession.Id" />
+                <button class="btn btn-warning" type="submit">Resume interrupted session</button>
+            </form>
+        </div>
+    </div>
+}
+
+@if (Model.ActiveSession is null)
+{
+    <form asp-action="Start" method="post" class="card" id="startSessionForm">
+        <div class="card-body">
+            <h5>Start session</h5>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="BranchId" class="form-label"></label>
+                    <input class="form-control" value="@Model.TerminalBranchName" readonly />
+                    <input type="hidden" asp-for="BranchId" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="RoleName" class="form-label"></label>
+                    <input asp-for="RoleName" class="form-control" readonly />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="TerminalCode" class="form-label"></label>
+                    <input asp-for="TerminalCode" class="form-control" readonly />
+                </div>
+                <div class="col-md-8">
+                    <label asp-for="Notes" class="form-label"></label>
+                    <input asp-for="Notes" class="form-control" />
+                </div>
+            </div>
+            <button class="btn btn-primary mt-3" type="submit" id="startSessionButton" disabled="@(!Model.CanStartSession)">Start session</button>
+        </div>
+    </form>
+}
+
+@section Scripts {
+    <script>
+        document.getElementById('startSessionForm')?.addEventListener('submit', function () {
+            const button = document.getElementById('startSessionButton');
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Starting session...';
+            }
+        });
+    </script>
+}
