@@ -6,6 +6,28 @@
     var isStockManager = User.IsInRole("StockManager") && !isAdmin;
 }
 
+@functions {
+    private static string BadgeClass(string status) => status switch
+    {
+        "Critical" or "Offline" => "text-bg-danger",
+        "Warning" or "Stale" => "text-bg-warning",
+        "Healthy" or "Online" => "text-bg-success",
+        "Inactive" => "text-bg-secondary",
+        _ => "text-bg-info"
+    };
+
+    private static string FormatDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "Never";
+
+    private static string FormatDuration(DateTime startedAt, DateTime? endedAt)
+    {
+        var duration = (endedAt ?? DateTime.UtcNow) - startedAt;
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}h {duration.Minutes}m"
+            : $"{Math.Max(0, duration.Minutes)}m";
+    }
+}
+
 @if (User.Identity?.IsAuthenticated != true)
 {
     <div class="py-4">
@@ -19,90 +41,195 @@ else if (isAdmin && Model is not null)
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h1 class="mb-1">Admin Dashboard</h1>
-            <p class="text-muted mb-0">Manage structure, users, terminals, and read-only branch reporting.</p>
+            <p class="text-muted mb-0">Operations health across branches, terminals, sessions, sales, stock, and audit signals.</p>
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary" asp-controller="Reports" asp-action="Index">Open reports</a>
-            <a class="btn btn-primary" asp-controller="Users" asp-action="Index">Manage users</a>
+            <a class="btn btn-primary" asp-controller="Terminals" asp-action="Index">Manage terminals</a>
         </div>
     </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-3">
-            <a class="card h-100 text-decoration-none text-dark" asp-controller="Users" asp-action="Index">
-                <div class="card-body">
-                    <div class="text-muted small">Users</div>
-                    <div class="display-6">@Model.TotalUsers</div>
-                    <div class="small text-muted">Manage accounts, roles, and branch assignments</div>
+    <section class="mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="h5 mb-0">Critical Alerts</h2>
+                    <div class="small text-muted">Top operational issues needing action</div>
                 </div>
-            </a>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <a class="card h-100 text-decoration-none text-dark" asp-controller="Branches" asp-action="Index">
-                <div class="card-body">
-                    <div class="text-muted small">Active branches</div>
-                    <div class="display-6">@Model.ActiveBranches</div>
-                    <div class="small text-muted">Branch structure and availability</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <a class="card h-100 text-decoration-none text-dark" asp-controller="Terminals" asp-action="Index">
-                <div class="card-body">
-                    <div class="text-muted small">Registered terminals</div>
-                    <div class="display-6">@Model.TotalTerminals</div>
-                    <div class="small text-muted">Terminal assignment and status</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <a class="card h-100 text-decoration-none text-dark" asp-controller="Categories" asp-action="Index">
-                <div class="card-body">
-                    <div class="text-muted small">Categories</div>
-                    <div class="display-6">@Model.TotalCategories</div>
-                    <div class="small text-muted">Product grouping and catalog structure</div>
-                </div>
-            </a>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <a class="card h-100 text-decoration-none text-dark" asp-controller="Reports" asp-action="Index">
-                <div class="card-body">
-                    <div class="text-muted small">Today's sales</div>
-                    <div class="h2 mb-1">@Model.TodaySalesTotal.ToString("C")</div>
-                    <div class="small text-muted">@Model.TodayCompletedOrders completed orders</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="text-muted small">Active sessions</div>
-                    <div class="h2 mb-1">@Model.ActiveSessions</div>
-                    <div class="small text-muted">Cashier and stock sessions currently active</div>
-                </div>
+                <span class="small text-muted">Updated @Model.GeneratedAtUtc.ToLocalTime().ToString("HH:mm:ss")</span>
+            </div>
+            <div class="card-body">
+                @if (Model.Alerts.Count == 0)
+                {
+                    <div class="text-success">No critical operational alerts right now.</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var alert in Model.Alerts)
+                        {
+                            <div class="list-group-item px-0 d-flex justify-content-between gap-3">
+                                <div>
+                                    <span class="badge @BadgeClass(alert.Severity) me-2">@alert.Severity</span>
+                                    <strong>@alert.Title</strong>
+                                    <div class="small text-muted mt-1">@alert.Detail</div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(alert.ActionUrl))
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary align-self-center" href="@alert.ActionUrl">Open</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
-        <div class="col-md-4">
-            <a class="card h-100 text-decoration-none text-dark" asp-controller="Reports" asp-action="Index">
-                <div class="card-body">
-                    <div class="text-muted small">Low stock alerts</div>
-                    <div class="h2 mb-1">@Model.LowStockCount</div>
-                    <div class="small text-muted">Read-only inventory summary in reports</div>
+    </section>
+
+    <section class="row g-3 mb-4">
+        @foreach (var card in Model.MetricCards)
+        {
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between gap-2">
+                            <div class="text-muted small">@card.Title</div>
+                            <span class="badge @BadgeClass(card.Badge)">@card.Badge</span>
+                        </div>
+                        <div class="h3 mt-2 mb-1">@card.Value</div>
+                        <div class="small text-muted">@card.Hint</div>
+                    </div>
                 </div>
-            </a>
+            </div>
+        }
+    </section>
+
+    <section class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h2 class="h5 mb-0">Branch Health</h2>
         </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Branch</th>
+                        <th>Terminals</th>
+                        <th>Online</th>
+                        <th>Sessions</th>
+                        <th>Today Orders</th>
+                        <th>Today Sales</th>
+                        <th>Low Stock</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var branch in Model.BranchHealth)
+                    {
+                        <tr>
+                            <td>@branch.BranchName</td>
+                            <td>@branch.ActiveTerminals</td>
+                            <td>@branch.OnlineTerminals</td>
+                            <td>@branch.ActiveSessions</td>
+                            <td>@branch.TodayOrders</td>
+                            <td>@branch.TodaySales.ToString("C")</td>
+                            <td>@branch.LowStockCount</td>
+                            <td><span class="badge @BadgeClass(branch.Status)">@branch.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="row g-4 mb-4">
+        <section class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h2 class="h5 mb-0">Terminal Health</h2>
+                    <a class="btn btn-sm btn-outline-secondary" asp-controller="Terminals" asp-action="Index">Full list</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Terminal</th>
+                                <th>Branch</th>
+                                <th>Status</th>
+                                <th>Last Seen</th>
+                                <th>Current User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var terminal in Model.TerminalHealth)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@terminal.TerminalCode</strong>
+                                        <div class="small text-muted">@terminal.TerminalName</div>
+                                    </td>
+                                    <td>@terminal.BranchName</td>
+                                    <td><span class="badge @BadgeClass(terminal.Status)">@terminal.Status</span></td>
+                                    <td>@FormatDate(terminal.LastSeenAt)</td>
+                                    <td>@(terminal.CurrentUser ?? "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Sales Snapshot</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-lg-3">
+                            <div class="small text-muted">Sales</div>
+                            <div class="h5">@Model.SalesSnapshot.TodaySales.ToString("C")</div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="small text-muted">Completed</div>
+                            <div class="h5">@Model.SalesSnapshot.TodayCompletedOrders</div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="small text-muted">Cancelled</div>
+                            <div class="h5">@Model.SalesSnapshot.TodayCancelledOrders</div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="small text-muted">Avg Order</div>
+                            <div class="h5">@Model.SalesSnapshot.AverageOrderValue.ToString("C")</div>
+                        </div>
+                    </div>
+
+                    <h3 class="h6">Hourly Sales</h3>
+                    @if (Model.SalesSnapshot.HourlySales.Count == 0)
+                    {
+                        <div class="text-muted small">No completed orders today.</div>
+                    }
+                    else
+                    {
+                        @foreach (var hour in Model.SalesSnapshot.HourlySales)
+                        {
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div class="small text-muted" style="width:48px">@hour.Hour:00</div>
+                                <div class="progress flex-grow-1" style="height: 8px;">
+                                    <div class="progress-bar" style="width:@hour.PercentOfPeak%"></div>
+                                </div>
+                                <div class="small text-end" style="width:96px">@hour.SalesTotal.ToString("C")</div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </section>
     </div>
 
-    <div class="card">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <div>
-                <h2 class="h5 mb-0">Recent Sessions</h2>
-                <div class="small text-muted">Latest branch activity by role and terminal</div>
-            </div>
-            <a class="btn btn-sm btn-outline-secondary" asp-controller="Reports" asp-action="Index">View reports</a>
+    <section class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h2 class="h5 mb-0">Recent Sessions</h2>
         </div>
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
@@ -112,8 +239,13 @@ else if (isAdmin && Model is not null)
                         <th>User</th>
                         <th>Role</th>
                         <th>Branch</th>
+                        <th>Terminal</th>
                         <th>Status</th>
                         <th>Started</th>
+                        <th>Duration</th>
+                        <th>Heartbeat</th>
+                        <th>Orders</th>
+                        <th>Drafts</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -121,22 +253,90 @@ else if (isAdmin && Model is not null)
                     {
                         <tr>
                             <td>@session.SessionCode</td>
-                            <td>@(session.User?.Email ?? session.UserId)</td>
+                            <td>@session.UserEmail</td>
                             <td>@session.RoleName</td>
-                            <td>@session.Branch?.Name</td>
-                            <td><span class="badge text-bg-light">@session.Status</span></td>
-                            <td>@session.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                        </tr>
-                    }
-                    @if (Model.RecentSessions.Count == 0)
-                    {
-                        <tr>
-                            <td colspan="6" class="text-muted">No sessions recorded yet.</td>
+                            <td>@session.BranchName</td>
+                            <td>@session.TerminalName <span class="text-muted small">(@session.TerminalCode)</span></td>
+                            <td><span class="badge @BadgeClass(session.Status)">@session.Status</span></td>
+                            <td>@FormatDate(session.StartedAt)</td>
+                            <td>@FormatDuration(session.StartedAt, session.EndedAt)</td>
+                            <td>@FormatDate(session.LastHeartbeatAt)</td>
+                            <td>@session.CompletedOrdersCount</td>
+                            <td>@session.DraftOrdersCount</td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
+    </section>
+
+    <div class="row g-4">
+        <section class="col-xl-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Inventory Risk</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Branch</th>
+                                <th>Ingredient</th>
+                                <th>Current</th>
+                                <th>Minimum</th>
+                                <th>Severity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.InventoryRisks)
+                            {
+                                <tr>
+                                    <td>@item.BranchName</td>
+                                    <td>@item.IngredientName <span class="text-muted small">(@item.UnitType)</span></td>
+                                    <td>@item.CurrentQuantity.ToString("0.###")</td>
+                                    <td>@item.MinimumStockLevel.ToString("0.###")</td>
+                                    <td><span class="badge @BadgeClass(item.Severity)">@item.Severity</span></td>
+                                </tr>
+                            }
+                            @if (Model.InventoryRisks.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-muted">No low stock risks detected.</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="col-xl-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h2 class="h5 mb-0">Security / Admin Warnings</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Failed logins today</span>
+                        <span class="badge text-bg-secondary">@Model.SecuritySummary.FailedLoginsToday</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Unauthorized branch attempts</span>
+                        <span class="badge text-bg-secondary">@Model.SecuritySummary.UnauthorizedAccessToday</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Admin changes today</span>
+                        <span class="badge text-bg-info">@Model.SecuritySummary.AdminChangesToday</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-2">
+                        <span>Terminal changes today</span>
+                        <span class="badge text-bg-info">@Model.SecuritySummary.TerminalChangesToday</span>
+                    </div>
+                    @if (!Model.SecuritySummary.HasAuditLogs)
+                    {
+                        <div class="small text-muted mt-3">Audit log table is available, but no audit entries exist yet.</div>
+                    }
+                </div>
+            </div>
+        </section>
     </div>
 }
 else

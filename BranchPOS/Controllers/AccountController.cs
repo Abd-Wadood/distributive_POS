@@ -35,7 +35,8 @@ public class AccountController : Controller
             return View(await BuildLoginModelAsync(model, returnUrl));
         }
 
-        var user = await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.Email == model.Email);
+        var normalizedEmail = _userManager.NormalizeEmail(model.Email);
+        var user = await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail);
         if (user is not null && !user.IsActive)
         {
             ModelState.AddModelError(string.Empty, "This account is inactive. Contact an administrator.");
@@ -45,7 +46,7 @@ public class AccountController : Controller
         var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
         if (result.Succeeded)
         {
-            user ??= await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.Email == model.Email);
+            user ??= await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail);
             if (user is null)
             {
                 await _signInManager.SignOutAsync();

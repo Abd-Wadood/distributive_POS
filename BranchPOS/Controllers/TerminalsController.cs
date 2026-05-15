@@ -1,200 +1,98 @@
-using BranchPOS.Data;
+using BranchPOS.Exceptions;
 using BranchPOS.Services;
 using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 
 namespace BranchPOS.Controllers;
 
 [Authorize(Roles = "Admin")]
 public class TerminalsController : Controller
 {
-    private readonly AppDbContext _context;
-    private readonly IBranchService _branchService;
+    private readonly ITerminalService _terminalService;
+    private readonly IErrorLoggingService _errorLoggingService;
 
-    public TerminalsController(AppDbContext context, IBranchService branchService)
+    public TerminalsController(ITerminalService terminalService, IErrorLoggingService errorLoggingService)
     {
-        _context = context;
-        _branchService = branchService;
+        _terminalService = terminalService;
+        _errorLoggingService = errorLoggingService;
     }
 
     public async Task<IActionResult> Index()
     {
-        return View(await BuildModelAsync(new TerminalCreateViewModel()));
+        return View(await _terminalService.BuildAdminModelAsync(new TerminalCreateViewModel(), User.GetUserId()));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind(Prefix = "NewTerminal")] TerminalCreateViewModel model)
     {
-        model.TerminalCode = TerminalContextService.NormalizeCode(model.TerminalCode);
-        if (string.IsNullOrWhiteSpace(model.TerminalCode))
-        {
-            ModelState.AddModelError(nameof(model.TerminalCode), "Terminal code is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(model.Name))
-        {
-            ModelState.AddModelError(nameof(model.Name), "Terminal name is required.");
-        }
-
-        if (await _context.Terminals.AnyAsync(x => x.TerminalCode == model.TerminalCode))
-        {
-            ModelState.AddModelError(nameof(model.TerminalCode), "Terminal code already exists.");
-        }
-
         try
         {
-            await _branchService.EnsureBranchAccessAsync(User.GetUserId(), model.BranchId);
+            await _terminalService.CreateAsync(model, User.GetUserId());
+            return RedirectToAction(nameof(Index));
         }
         catch (InvalidOperationException ex)
         {
-            ModelState.AddModelError(nameof(model.BranchId), ex.Message);
+            ModelState.AddModelError(string.Empty, ToUserMessage(ex));
+            return View("Index", await _terminalService.BuildAdminModelAsync(model, User.GetUserId()));
         }
-
-        if (!ModelState.IsValid)
-        {
-            return View("Index", await BuildModelAsync(model));
-        }
-
-        _context.Terminals.Add(new BranchPOS.Models.Terminal
-        {
-            TerminalCode = model.TerminalCode,
-            BranchId = model.BranchId,
-            Name = model.Name.Trim(),
-            IpAddress = string.IsNullOrWhiteSpace(model.IpAddress) ? null : model.IpAddress.Trim()
-        });
-        await _context.SaveChangesAsync();
-
-        return RedirectToAction(nameof(Index));
     }
 
     public async Task<IActionResult> Edit(int id)
     {
-        var terminal = await _context.Terminals.FirstOrDefaultAsync(x => x.Id == id);
-        if (terminal is null)
+        try
+        {
+            return View(await _terminalService.BuildEditModelAsync(id, User.GetUserId()));
+        }
+        catch (PosNotFoundException)
         {
             return NotFound();
         }
-
-        await _branchService.EnsureBranchAccessAsync(User.GetUserId(), terminal.BranchId);
-        return View(await BuildEditModelAsync(new TerminalEditViewModel
-        {
-            Id = terminal.Id,
-            TerminalCode = terminal.TerminalCode,
-            BranchId = terminal.BranchId,
-            Name = terminal.Name,
-            IpAddress = terminal.IpAddress,
-            IsActive = terminal.IsActive
-        }));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(int id, TerminalEditViewModel model)
     {
-        if (id != model.Id)
-        {
-            return BadRequest();
-        }
-
-        model.TerminalCode = TerminalContextService.NormalizeCode(model.TerminalCode);
-        if (string.IsNullOrWhiteSpace(model.TerminalCode))
-        {
-            ModelState.AddModelError(nameof(model.TerminalCode), "Terminal code is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(model.Name))
-        {
-            ModelState.AddModelError(nameof(model.Name), "Terminal name is required.");
-        }
-
-        if (await _context.Terminals.AnyAsync(x => x.Id != id && x.TerminalCode == model.TerminalCode))
-        {
-            ModelState.AddModelError(nameof(model.TerminalCode), "Terminal code already exists.");
-        }
-
         try
         {
-            await _branchService.EnsureBranchAccessAsync(User.GetUserId(), model.BranchId);
+            await _terminalService.UpdateAsync(id, model, User.GetUserId());
+            return RedirectToAction(nameof(Index));
         }
-        catch (InvalidOperationException ex)
-        {
-            ModelState.AddModelError(nameof(model.BranchId), ex.Message);
-        }
-
-        if (!ModelState.IsValid)
-        {
-            return View(await BuildEditModelAsync(model));
-        }
-
-        var terminal = await _context.Terminals.FirstOrDefaultAsync(x => x.Id == id);
-        if (terminal is null)
+        catch (PosNotFoundException)
         {
             return NotFound();
         }
-
-        terminal.TerminalCode = model.TerminalCode;
-        terminal.BranchId = model.BranchId;
-        terminal.Name = model.Name.Trim();
-        terminal.IpAddress = string.IsNullOrWhiteSpace(model.IpAddress) ? null : model.IpAddress.Trim();
-        terminal.IsActive = model.IsActive;
-        await _context.SaveChangesAsync();
-
-        return RedirectToAction(nameof(Index));
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ToUserMessage(ex));
+            return View(await _terminalService.BuildEditModelAsync(model.Id, User.GetUserId()));
+        }
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Toggle(int id)
     {
-        var terminal = await _context.Terminals.FirstOrDefaultAsync(x => x.Id == id);
-        if (terminal is null)
+        try
+        {
+            await _terminalService.ToggleAsync(id, User.GetUserId());
+            return RedirectToAction(nameof(Index));
+        }
+        catch (PosNotFoundException)
         {
             return NotFound();
         }
-
-        await _branchService.EnsureBranchAccessAsync(User.GetUserId(), terminal.BranchId);
-        terminal.IsActive = !terminal.IsActive;
-        await _context.SaveChangesAsync();
-        return RedirectToAction(nameof(Index));
-    }
-
-    private async Task<TerminalAdminViewModel> BuildModelAsync(TerminalCreateViewModel createModel)
-    {
-        var branches = await _branchService.GetBranchesForUserAsync(User.GetUserId());
-        createModel.Branches = branches
-            .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == createModel.BranchId))
-            .ToList();
-        if (createModel.BranchId <= 0)
+        catch (InvalidOperationException ex)
         {
-            createModel.BranchId = branches.FirstOrDefault()?.Id ?? 1;
+            TempData["Error"] = ToUserMessage(ex);
+            return RedirectToAction(nameof(Index));
         }
-
-        return new TerminalAdminViewModel
-        {
-            NewTerminal = createModel,
-            Terminals = await _context.Terminals
-                .Include(x => x.Branch)
-                .OrderBy(x => x.Branch!.Name)
-                .ThenBy(x => x.TerminalCode)
-                .ToListAsync(),
-            Heartbeats = await _context.TerminalHeartbeats
-                .Include(x => x.Terminal)
-                .Include(x => x.Branch)
-                .Include(x => x.CurrentUser)
-                .Include(x => x.CurrentSession)
-                .OrderByDescending(x => x.LastSeenAt)
-                .ToListAsync()
-        };
     }
 
-    private async Task<TerminalEditViewModel> BuildEditModelAsync(TerminalEditViewModel model)
+    private string ToUserMessage(InvalidOperationException ex)
     {
-        var branches = await _branchService.GetBranchesForUserAsync(User.GetUserId());
-        model.Branches = branches
-            .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.BranchId))
-            .ToList();
-        return model;
+        var message = ex is BranchPosException branchPosException ? branchPosException.UserMessage : ex.Message;
+        _errorLoggingService.LogException(HttpContext, ex, message);
+        return message;
     }
 }
 

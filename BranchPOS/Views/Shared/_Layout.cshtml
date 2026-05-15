@@ -2,16 +2,11 @@
 @using BranchPOS.Models
 @using Microsoft.EntityFrameworkCore
 @inject BranchPOS.Data.AppDbContext DbContext
+@inject BranchPOS.Services.ITerminalContextService TerminalContext
 @{
     UserSession? layoutSession = null;
-    Terminal? layoutTerminal = null;
-    var layoutTerminalCode = Context.Request.Cookies[BranchPOS.Services.TerminalContextService.TerminalCodeCookieName];
-    if (!string.IsNullOrWhiteSpace(layoutTerminalCode))
-    {
-        layoutTerminalCode = BranchPOS.Services.TerminalContextService.NormalizeCode(layoutTerminalCode);
-        layoutTerminal = await DbContext.Terminals.Include(x => x.Branch)
-            .FirstOrDefaultAsync(x => x.TerminalCode == layoutTerminalCode && x.IsActive);
-    }
+    Terminal? layoutTerminal = await TerminalContext.GetCurrentTerminalAsync();
+    var layoutTerminalCode = layoutTerminal?.TerminalCode;
     if (User.Identity?.IsAuthenticated == true)
     {
         var layoutUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);

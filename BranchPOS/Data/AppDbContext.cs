@@ -29,6 +29,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
     public DbSet<UserSessionHeartbeat> UserSessionHeartbeats => Set<UserSessionHeartbeat>();
     public DbSet<Terminal> Terminals => Set<Terminal>();
     public DbSet<TerminalHeartbeat> TerminalHeartbeats => Set<TerminalHeartbeat>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -36,13 +37,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<Category>(entity =>
         {
-            entity.HasIndex(x => x.Name).IsUnique();
+            entity.HasIndex(x => x.Name).IsUnique().HasDatabaseName("UX_Categories_Name");
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
         });
 
         builder.Entity<Branch>(entity =>
         {
-            entity.HasIndex(x => x.BranchCode).IsUnique();
+            entity.HasIndex(x => x.BranchCode).IsUnique().HasDatabaseName("UX_Branches_BranchCode");
             entity.Property(x => x.BranchCode).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Address).HasMaxLength(300);
@@ -52,6 +53,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         builder.Entity<ApplicationUser>(entity =>
         {
             entity.HasIndex(x => x.BranchId);
+            entity.HasIndex(x => new { x.BranchId, x.IsActive }).HasDatabaseName("IX_AspNetUsers_BranchId_IsActive");
             entity.Property(x => x.FullName).HasMaxLength(160);
             entity.HasOne(x => x.Branch)
                 .WithMany()
@@ -108,6 +110,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.ToTable(t => t.HasCheckConstraint("CK_Inventories_CurrentQuantity_NonNegative", "\"CurrentQuantity\" >= 0"));
             entity.HasIndex(x => new { x.BranchId, x.IngredientId }).IsUnique();
             entity.HasIndex(x => x.BranchId);
+            entity.HasIndex(x => new { x.BranchId, x.CurrentQuantity }).HasDatabaseName("IX_Inventories_BranchId_CurrentQuantity");
             entity.Property(x => x.CurrentQuantity).HasPrecision(18, 3);
             entity.HasOne(x => x.Branch)
                 .WithMany()
@@ -121,7 +124,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<InventoryTransaction>(entity =>
         {
-            entity.HasIndex(x => x.PublicId).IsUnique();
+            entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_InventoryTransactions_PublicId");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserSessionId);
@@ -161,7 +164,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<Purchase>(entity =>
         {
-            entity.HasIndex(x => x.PublicId).IsUnique();
+            entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_Purchases_PublicId");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserSessionId);
@@ -211,7 +214,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<Customer>(entity =>
         {
-            entity.HasIndex(x => new { x.BranchId, x.PhoneNumber }).IsUnique();
+            entity.HasIndex(x => new { x.BranchId, x.PhoneNumber }).IsUnique().HasDatabaseName("UX_Customers_BranchId_PhoneNumber");
             entity.HasIndex(x => x.BranchId);
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.PhoneNumber).HasMaxLength(40).IsRequired();
@@ -224,12 +227,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<Order>(entity =>
         {
-            entity.HasIndex(x => x.PublicId).IsUnique();
-            entity.HasIndex(x => new { x.BranchId, x.OrderNumber }).IsUnique();
+            entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_Orders_PublicId");
+            entity.HasIndex(x => new { x.BranchId, x.OrderNumber }).IsUnique().HasDatabaseName("UX_Orders_BranchId_OrderNumber");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserSessionId);
             entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => new { x.BranchId, x.CompletedAt, x.OrderStatus }).HasDatabaseName("IX_Orders_BranchId_CompletedAt_OrderStatus");
             entity.HasIndex(x => x.OrderStatus);
             entity.Property(x => x.OrderNumber).HasMaxLength(40).IsRequired();
             entity.Property(x => x.OrderType).HasConversion<string>().HasMaxLength(40);
@@ -286,12 +290,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<UserSession>(entity =>
         {
-            entity.HasIndex(x => x.PublicId).IsUnique();
-            entity.HasIndex(x => x.SessionCode).IsUnique();
+            entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_UserSessions_PublicId");
+            entity.HasIndex(x => x.SessionCode).IsUnique().HasDatabaseName("UX_UserSessions_SessionCode");
             entity.HasIndex(x => new { x.UserId, x.Status });
+            entity.HasIndex(x => new { x.Status, x.StartedAt }).HasDatabaseName("IX_UserSessions_Status_StartedAt");
+            entity.HasIndex(x => new { x.BranchId, x.Status }).HasDatabaseName("IX_UserSessions_BranchId_Status");
+            entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserId)
                 .IsUnique()
-                .HasFilter("\"Status\" = 'Active'");
+                .HasFilter("\"Status\" = 'Active'")
+                .HasDatabaseName("UX_UserSessions_UserId_Active");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
             entity.Property(x => x.SessionCode).HasMaxLength(50).IsRequired();
@@ -316,11 +324,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<Terminal>(entity =>
         {
-            entity.HasIndex(x => x.TerminalCode).IsUnique();
+            entity.HasIndex(x => x.TerminalCode).IsUnique().HasDatabaseName("UX_Terminals_TerminalCode");
             entity.HasIndex(x => x.BranchId);
+            entity.HasIndex(x => new { x.BranchId, x.IsActive }).HasDatabaseName("IX_Terminals_BranchId_IsActive");
             entity.Property(x => x.TerminalCode).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
             entity.Property(x => x.IpAddress).HasMaxLength(60);
+            entity.Property(x => x.TerminalTokenHash).HasMaxLength(128);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -329,8 +339,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<TerminalHeartbeat>(entity =>
         {
-            entity.HasIndex(x => x.TerminalId).IsUnique();
+            entity.HasIndex(x => x.TerminalId).IsUnique().HasDatabaseName("UX_TerminalHeartbeats_TerminalId");
             entity.HasIndex(x => x.BranchId);
+            entity.HasIndex(x => new { x.BranchId, x.LastSeenAt }).HasDatabaseName("IX_TerminalHeartbeats_BranchId_LastSeenAt");
             entity.Property(x => x.TerminalCode).HasMaxLength(40).IsRequired();
             entity.HasOne(x => x.Terminal)
                 .WithMany()
@@ -352,13 +363,41 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<UserSessionHeartbeat>(entity =>
         {
-            entity.HasIndex(x => x.UserSessionId).IsUnique();
+            entity.HasIndex(x => x.UserSessionId).IsUnique().HasDatabaseName("UX_UserSessionHeartbeats_UserSessionId");
             entity.Property(x => x.TerminalName).HasMaxLength(120);
             entity.HasOne(x => x.UserSession)
                 .WithMany()
                 .HasForeignKey(x => x.UserSessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        builder.Entity<AuditLog>(entity =>
+        {
+            entity.HasIndex(x => x.CreatedAt);
+            entity.HasIndex(x => new { x.EntityName, x.EntityId });
+            entity.HasIndex(x => x.UserId);
+            entity.Property(x => x.Action).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.EntityName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.EntityId).HasMaxLength(80);
+            entity.Property(x => x.OldValues).HasColumnType("jsonb");
+            entity.Property(x => x.NewValues).HasColumnType("jsonb");
+            entity.Property(x => x.IpAddress).HasMaxLength(80);
+            entity.Property(x => x.UserAgent).HasMaxLength(500);
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Terminal)
+                .WithMany()
+                .HasForeignKey(x => x.TerminalId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.HasSequence<long>("SessionCodeSequence");
 
         builder.Entity<Branch>().HasData(new Branch
         {

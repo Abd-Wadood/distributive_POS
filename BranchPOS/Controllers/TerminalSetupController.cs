@@ -11,10 +11,12 @@ namespace BranchPOS.Controllers;
 public class TerminalSetupController : Controller
 {
     private readonly AppDbContext _context;
+    private readonly ITerminalContextService _terminalContextService;
 
-    public TerminalSetupController(AppDbContext context)
+    public TerminalSetupController(AppDbContext context, ITerminalContextService terminalContextService)
     {
         _context = context;
+        _terminalContextService = terminalContextService;
     }
 
     public async Task<IActionResult> Index(string? returnUrl = null)
@@ -50,12 +52,7 @@ public class TerminalSetupController : Controller
             return View("Index", model);
         }
 
-        Response.Cookies.Append(TerminalContextService.TerminalCodeCookieName, terminal.TerminalCode, new CookieOptions
-        {
-            IsEssential = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = DateTimeOffset.UtcNow.AddYears(1)
-        });
+        await _terminalContextService.IssueTerminalCookieAsync(terminal);
 
         var returnUrl = Url.IsLocalUrl(model.ReturnUrl) ? model.ReturnUrl : Url.Action("Login", "Account");
         return Redirect(returnUrl!);

@@ -3,6 +3,7 @@ using BranchPOS.DTOs;
 using BranchPOS.Models;
 using BranchPOS.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BranchPOS.Tests;
 
@@ -427,7 +428,13 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
             new TestBranchContext(branchId));
 
     private UserSessionService UserSessionService(AppDbContext context) =>
-        new(context, new AllowAllBranchService(context));
+        new(
+            context,
+            new AllowAllBranchService(context),
+            new StaticTerminalContextService(context, "MAIN-01"),
+            new TestSessionCodeGenerator(),
+            new TestAuditLogService(),
+            Options.Create(new PosOperationalOptions()));
 
     private InventoryService InventoryService(AppDbContext context, int branchId = 1) =>
         new(context, new TestBranchContext(branchId));
@@ -563,5 +570,31 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
             heartbeat.CurrentSessionId = sessionId;
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        public Task IssueTerminalCookieAsync(Terminal terminal, string? rawToken = null, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class TestSessionCodeGenerator : ISessionCodeGeneratorService
+    {
+        private int _value;
+
+        public Task<string> GenerateAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult($"SES-TEST-{Interlocked.Increment(ref _value):000000}-{Guid.NewGuid():N}");
+    }
+
+    private sealed class TestAuditLogService : IAuditLogService
+    {
+        public Task LogAsync(
+            string action,
+            string entityName,
+            string? entityId,
+            object? oldValues = null,
+            object? newValues = null,
+            int? branchId = null,
+            int? terminalId = null,
+            string? userId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

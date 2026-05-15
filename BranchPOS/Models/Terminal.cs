@@ -19,6 +19,9 @@ public class Terminal
     [MaxLength(60)]
     public string? IpAddress { get; set; }
 
+    [MaxLength(128)]
+    public string? TerminalTokenHash { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

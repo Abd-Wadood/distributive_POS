@@ -3,6 +3,7 @@ using System;
 using BranchPOS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BranchPOS.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260515124822_PosHardeningAuditTerminalSecurity")]
+    partial class PosHardeningAuditTerminalSecurity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -103,9 +106,6 @@ namespace BranchPOS.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("BranchId", "IsActive")
-                        .HasDatabaseName("IX_AspNetUsers_BranchId_IsActive");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -401,9 +401,6 @@ namespace BranchPOS.Migrations
                     b.HasIndex("IngredientId")
                         .IsUnique();
 
-                    b.HasIndex("BranchId", "CurrentQuantity")
-                        .HasDatabaseName("IX_Inventories_BranchId_CurrentQuantity");
-
                     b.HasIndex("BranchId", "IngredientId")
                         .IsUnique();
 
@@ -595,9 +592,6 @@ namespace BranchPOS.Migrations
                     b.HasIndex("BranchId", "OrderNumber")
                         .IsUnique()
                         .HasDatabaseName("UX_Orders_BranchId_OrderNumber");
-
-                    b.HasIndex("BranchId", "CompletedAt", "OrderStatus")
-                        .HasDatabaseName("IX_Orders_BranchId_CompletedAt_OrderStatus");
 
                     b.ToTable("Orders");
                 });
@@ -913,9 +907,6 @@ namespace BranchPOS.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_Terminals_TerminalCode");
 
-                    b.HasIndex("BranchId", "IsActive")
-                        .HasDatabaseName("IX_Terminals_BranchId_IsActive");
-
                     b.ToTable("Terminals");
 
                     b.HasData(
@@ -970,9 +961,6 @@ namespace BranchPOS.Migrations
                     b.HasIndex("TerminalId")
                         .IsUnique()
                         .HasDatabaseName("UX_TerminalHeartbeats_TerminalId");
-
-                    b.HasIndex("BranchId", "LastSeenAt")
-                        .HasDatabaseName("IX_TerminalHeartbeats_BranchId_LastSeenAt");
 
                     b.ToTable("TerminalHeartbeats");
                 });
@@ -1060,12 +1048,6 @@ namespace BranchPOS.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_UserSessions_UserId_Active")
                         .HasFilter("\"Status\" = 'Active'");
-
-                    b.HasIndex("BranchId", "Status")
-                        .HasDatabaseName("IX_UserSessions_BranchId_Status");
-
-                    b.HasIndex("Status", "StartedAt")
-                        .HasDatabaseName("IX_UserSessions_Status_StartedAt");
 
                     b.HasIndex("UserId", "Status");
 

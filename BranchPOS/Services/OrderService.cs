@@ -153,6 +153,12 @@ public class OrderService : IOrderService
             _context.ChangeTracker.Clear();
             throw DatabaseErrorTranslator.ToUserException(ex, "Order could not be completed. Please retry.");
         }
+        catch (Exception ex) when (ex is not BranchPosException && DatabaseErrorTranslator.IsUniqueViolation(ex))
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            _context.ChangeTracker.Clear();
+            throw DatabaseErrorTranslator.ToUserException(ex, "Order could not be completed. Please retry.");
+        }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None);

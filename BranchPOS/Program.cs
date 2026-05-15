@@ -10,6 +10,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+builder.Services.AddDataProtection();
+builder.Services.Configure<PosOperationalOptions>(builder.Configuration.GetSection("PosOperations"));
+builder.Services.Configure<DashboardOptions>(builder.Configuration.GetSection("Dashboard"));
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -41,9 +45,12 @@ builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddScoped<IBranchContextService, BranchContextService>();
 builder.Services.AddScoped<IUserSessionService, UserSessionService>();
 builder.Services.AddScoped<ITerminalContextService, TerminalContextService>();
+builder.Services.AddScoped<ITerminalService, TerminalService>();
 builder.Services.AddScoped<IIdentitySeedService, IdentitySeedService>();
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 builder.Services.AddScoped<IErrorLoggingService, ErrorLoggingService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<ISessionCodeGeneratorService, SessionCodeGeneratorService>();
 
 var app = builder.Build();
 
@@ -72,11 +79,14 @@ app.Use(async (context, next) =>
         path.StartsWithSegments("/BranchPOS.styles.css") ||
         path.StartsWithSegments("/favicon.ico");
 
-    if (!isBypassPath &&
-        !context.Request.Cookies.ContainsKey(TerminalContextService.TerminalCodeCookieName))
+    if (!isBypassPath)
     {
-        context.Response.Redirect($"/TerminalSetup?returnUrl={Uri.EscapeDataString(context.Request.PathBase + context.Request.Path + context.Request.QueryString)}");
-        return;
+        var terminalContextService = context.RequestServices.GetRequiredService<ITerminalContextService>();
+        if (await terminalContextService.GetCurrentTerminalAsync() is null)
+        {
+            context.Response.Redirect($"/TerminalSetup?returnUrl={Uri.EscapeDataString(context.Request.PathBase + context.Request.Path + context.Request.QueryString)}");
+            return;
+        }
     }
 
     await next();

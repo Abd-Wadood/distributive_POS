@@ -14,7 +14,8 @@ public static class DatabaseErrorTranslator
 
     public static BranchPosException ToUserException(Exception exception, string fallbackMessage)
     {
-        if (IsConcurrencyFailure(exception))
+        var postgresException = FindPostgresException(exception);
+        if (postgresException is { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected })
         {
             return new PosConcurrencyException(
                 "Another terminal completed a stock change first. Please retry.",
@@ -22,9 +23,22 @@ public static class DatabaseErrorTranslator
                 exception);
         }
 
-        if (IsUniqueViolation(exception))
+        if (postgresException is { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            return new BusinessException(fallbackMessage, "PostgreSQL unique constraint violation.", exception);
+            var userMessage = postgresException.ConstraintName switch
+            {
+                "UX_Branches_BranchCode" => "Branch code already exists.",
+                "UX_Terminals_TerminalCode" => "Terminal code already exists.",
+                "UX_Customers_BranchId_PhoneNumber" => "Customer already exists for this branch.",
+                "UX_UserSessions_UserId_Active" => "You already have an active session.",
+                "UX_UserSessions_SessionCode" => "Session code already exists. Please retry.",
+                "UX_Orders_BranchId_OrderNumber" => "Order number already exists. Please retry.",
+                "UX_TerminalHeartbeats_TerminalId" => "Terminal heartbeat already exists. Please retry.",
+                "UX_UserSessionHeartbeats_UserSessionId" => "Session heartbeat already exists. Please retry.",
+                _ => fallbackMessage
+            };
+
+            return new BusinessException(userMessage, $"PostgreSQL unique constraint violation: {postgresException.ConstraintName}.", exception);
         }
 
         return new BusinessException(fallbackMessage, "Database operation failed.", exception);
