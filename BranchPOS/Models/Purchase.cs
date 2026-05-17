@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BranchPOS.Models;
 
 public class Purchase
@@ -5,6 +7,9 @@ public class Purchase
     public int Id { get; set; }
 
     public Guid PublicId { get; set; } = Guid.NewGuid();
+
+    [MaxLength(120)]
+    public string? IdempotencyKey { get; set; }
 
     public int BranchId { get; set; }
 
@@ -27,6 +32,9 @@ public class Purchase
     public int SupplierId { get; set; }
 
     public Supplier? Supplier { get; set; }
+
+    [MaxLength(80)]
+    public string? InvoiceNumber { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

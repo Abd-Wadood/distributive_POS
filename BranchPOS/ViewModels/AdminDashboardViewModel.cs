@@ -166,6 +166,20 @@ public class SecuritySummaryViewModel
 {
     public int FailedLoginsToday { get; set; }
 
+    public int LockedAccounts { get; set; }
+
+    public int RateLimitHitsToday { get; set; }
+
+    public int SuspiciousIpsToday { get; set; }
+
+    public int RepeatedLoginFailuresByUsername { get; set; }
+
+    public int RepeatedLoginFailuresByIp { get; set; }
+
+    public int TerminalHeartbeatSpamCount { get; set; }
+
+    public int BlockedReportSpamCount { get; set; }
+
     public int UnauthorizedAccessToday { get; set; }
 
     public int AdminChangesToday { get; set; }

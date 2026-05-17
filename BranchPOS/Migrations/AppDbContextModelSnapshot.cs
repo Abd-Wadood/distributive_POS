@@ -123,6 +123,10 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("AttemptedUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int?>("BranchId")
                         .HasColumnType("integer");
 
@@ -138,15 +142,29 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
                     b.Property<string>("IpAddress")
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("NewValues")
                         .HasColumnType("jsonb");
 
                     b.Property<string>("OldValues")
                         .HasColumnType("jsonb");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<int?>("TerminalId")
                         .HasColumnType("integer");
@@ -169,6 +187,18 @@ namespace BranchPOS.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("EntityName", "EntityId");
+
+                    b.HasIndex("EventType", "CreatedAt")
+                        .HasDatabaseName("IX_AuditLogs_EventType_CreatedAt");
+
+                    b.HasIndex("IpAddress", "CreatedAt")
+                        .HasDatabaseName("IX_AuditLogs_IpAddress_CreatedAt");
+
+                    b.HasIndex("Severity", "CreatedAt")
+                        .HasDatabaseName("IX_AuditLogs_Severity_CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("IX_AuditLogs_UserId_CreatedAt");
 
                     b.ToTable("AuditLogs");
                 });
@@ -329,6 +359,91 @@ namespace BranchPOS.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("BranchPOS.Models.IdempotencyRecord", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("OperationType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("ResourceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("ResponseBodySummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("ResponseCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int?>("TerminalId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_IdempotencyRecords_ExpiresAt");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_IdempotencyRecords_IdempotencyKey");
+
+                    b.HasIndex("TerminalId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OperationType", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_IdempotencyRecords_OperationType_IdempotencyKey");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("IX_IdempotencyRecords_Status_CreatedAt");
+
+                    b.ToTable("IdempotencyRecords");
+                });
+
             modelBuilder.Entity("BranchPOS.Models.Ingredient", b =>
                 {
                     b.Property<int>("Id")
@@ -427,6 +542,10 @@ namespace BranchPOS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
                     b.Property<int>("IngredientId")
                         .HasColumnType("integer");
 
@@ -468,6 +587,11 @@ namespace BranchPOS.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryTransactions_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("PerformedByUserId");
 
@@ -513,6 +637,10 @@ namespace BranchPOS.Migrations
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<bool>("IsSynced")
                         .HasColumnType("boolean");
@@ -581,6 +709,11 @@ namespace BranchPOS.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Orders_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("OrderStatus");
 
@@ -745,6 +878,14 @@ namespace BranchPOS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("InvoiceNumber")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<bool>("IsSynced")
                         .HasColumnType("boolean");
 
@@ -780,17 +921,25 @@ namespace BranchPOS.Migrations
 
                     b.HasIndex("CreatedAt");
 
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Purchases_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
                     b.HasIndex("PerformedByUserId");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UX_Purchases_PublicId");
 
-                    b.HasIndex("SupplierId");
-
                     b.HasIndex("TerminalId");
 
                     b.HasIndex("UserSessionId");
+
+                    b.HasIndex("SupplierId", "InvoiceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Purchases_SupplierId_InvoiceNumber")
+                        .HasFilter("\"InvoiceNumber\" IS NOT NULL");
 
                     b.ToTable("Purchases");
                 });
@@ -988,11 +1137,37 @@ namespace BranchPOS.Migrations
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("CashDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CloseIdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("ClosedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ClosingRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("CountedClosingCash")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("ExpectedClosingCash")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<bool>("IsSynced")
                         .HasColumnType("boolean");
@@ -1001,8 +1176,25 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<decimal>("OpeningCashAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReopenReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("ReopenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReopenedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("RequiresManagerApproval")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("RoleName")
                         .IsRequired()
@@ -1046,20 +1238,37 @@ namespace BranchPOS.Migrations
 
                     b.HasIndex("BranchId");
 
+                    b.HasIndex("CloseIdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserSessions_CloseIdempotencyKey")
+                        .HasFilter("\"CloseIdempotencyKey\" IS NOT NULL");
+
+                    b.HasIndex("ClosedByUserId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserSessions_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UX_UserSessions_PublicId");
+
+                    b.HasIndex("ReopenedByUserId");
 
                     b.HasIndex("SessionCode")
                         .IsUnique()
                         .HasDatabaseName("UX_UserSessions_SessionCode");
 
-                    b.HasIndex("TerminalId");
+                    b.HasIndex("TerminalId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserSessions_TerminalId_Active")
+                        .HasFilter("\"Status\" IN ('Active', 'Reopened', 'ClosingPending')");
 
                     b.HasIndex("UserId")
                         .IsUnique()
                         .HasDatabaseName("UX_UserSessions_UserId_Active")
-                        .HasFilter("\"Status\" = 'Active'");
+                        .HasFilter("\"Status\" IN ('Active', 'Reopened', 'ClosingPending')");
 
                     b.HasIndex("BranchId", "Status")
                         .HasDatabaseName("IX_UserSessions_BranchId_Status");
@@ -1067,9 +1276,19 @@ namespace BranchPOS.Migrations
                     b.HasIndex("Status", "StartedAt")
                         .HasDatabaseName("IX_UserSessions_Status_StartedAt");
 
+                    b.HasIndex("UserId", "BranchId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_UserSessions_UserId_BranchId_Active")
+                        .HasFilter("\"Status\" IN ('Active', 'Reopened', 'ClosingPending')");
+
                     b.HasIndex("UserId", "Status");
 
-                    b.ToTable("UserSessions");
+                    b.ToTable("UserSessions", t =>
+                        {
+                            t.HasCheckConstraint("CK_UserSessions_CountedClosingCash_NonNegative", "\"CountedClosingCash\" IS NULL OR \"CountedClosingCash\" >= 0");
+
+                            t.HasCheckConstraint("CK_UserSessions_OpeningCashAmount_NonNegative", "\"OpeningCashAmount\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("BranchPOS.Models.UserSessionHeartbeat", b =>
@@ -1275,6 +1494,30 @@ namespace BranchPOS.Migrations
                         .IsRequired();
 
                     b.Navigation("Branch");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.IdempotencyRecord", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.Terminal", "Terminal")
+                        .WithMany()
+                        .HasForeignKey("TerminalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Terminal");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Ingredient", b =>
@@ -1574,6 +1817,16 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "ClosedByUser")
+                        .WithMany()
+                        .HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "ReopenedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReopenedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("BranchPOS.Models.Terminal", "Terminal")
                         .WithMany()
                         .HasForeignKey("TerminalId")
@@ -1587,6 +1840,10 @@ namespace BranchPOS.Migrations
                         .IsRequired();
 
                     b.Navigation("Branch");
+
+                    b.Navigation("ClosedByUser");
+
+                    b.Navigation("ReopenedByUser");
 
                     b.Navigation("Terminal");
 

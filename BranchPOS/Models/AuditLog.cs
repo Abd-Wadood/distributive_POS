@@ -21,6 +21,18 @@ public class AuditLog
     [Required, MaxLength(120)]
     public string Action { get; set; } = string.Empty;
 
+    [MaxLength(120)]
+    public string EventType { get; set; } = string.Empty;
+
+    [MaxLength(40)]
+    public string Severity { get; set; } = "Info";
+
+    [MaxLength(500)]
+    public string? Message { get; set; }
+
+    [MaxLength(256)]
+    public string? AttemptedUserName { get; set; }
+
     [Required, MaxLength(120)]
     public string EntityName { get; set; } = string.Empty;
 

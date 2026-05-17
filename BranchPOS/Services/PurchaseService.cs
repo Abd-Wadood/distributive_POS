@@ -11,12 +11,14 @@ public class PurchaseService : IPurchaseService
 {
     private readonly AppDbContext _context;
     private readonly IBranchContextService _branchContextService;
+    private readonly IIdempotencyService _idempotencyService;
     private const decimal MaxPurchaseItemQuantity = 1_000_000m;
 
-    public PurchaseService(AppDbContext context, IBranchContextService branchContextService)
+    public PurchaseService(AppDbContext context, IBranchContextService branchContextService, IIdempotencyService idempotencyService)
     {
         _context = context;
         _branchContextService = branchContextService;
+        _idempotencyService = idempotencyService;
     }
 
     public async Task<List<Purchase>> GetPurchasesAsync(CancellationToken cancellationToken = default)
@@ -55,6 +57,32 @@ public class PurchaseService : IPurchaseService
 
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         await ValidateActiveStockSessionAsync(dto, cancellationToken);
+        var idempotencyHash = _idempotencyService.HashPayload(new
+        {
+            dto.BranchId,
+            dto.UserSessionId,
+            dto.PerformedByUserId,
+            dto.TerminalId,
+            dto.SupplierId,
+            dto.InvoiceNumber,
+            Items = dto.Items.OrderBy(x => x.IngredientId).Select(x => new { x.IngredientId, x.Quantity, x.UnitCost })
+        });
+        var idempotency = await _idempotencyService.BeginAsync("PurchaseCreate", dto.IdempotencyKey, idempotencyHash, dto.PerformedByUserId, dto.BranchId, dto.TerminalId, cancellationToken);
+        if (!idempotency.IsOwner)
+        {
+            if (!string.IsNullOrWhiteSpace(idempotency.ErrorMessage))
+            {
+                throw new BusinessException(idempotency.ErrorMessage);
+            }
+
+            if (idempotency.Record.ResourceId.HasValue)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return idempotency.Record.ResourceId.Value;
+            }
+
+            throw new BusinessException("This request is already being processed. Please wait.");
+        }
 
         var ingredientIds = dto.Items.Select(x => x.IngredientId).Distinct().ToList();
         var validIngredientIds = await _context.Ingredients
@@ -74,7 +102,9 @@ public class PurchaseService : IPurchaseService
             PerformedByUserId = dto.PerformedByUserId,
             TerminalId = dto.TerminalId,
             TerminalCode = dto.TerminalCode,
-            SupplierId = dto.SupplierId
+            SupplierId = dto.SupplierId,
+            InvoiceNumber = string.IsNullOrWhiteSpace(dto.InvoiceNumber) ? null : dto.InvoiceNumber.Trim(),
+            IdempotencyKey = dto.IdempotencyKey
         };
 
         foreach (var item in dto.Items)
@@ -91,8 +121,10 @@ public class PurchaseService : IPurchaseService
         _context.Purchases.Add(purchase);
         await _context.SaveChangesAsync(cancellationToken);
 
+        var movementIndex = 0;
         foreach (var item in dto.Items)
         {
+            movementIndex++;
             await _context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT 1 FROM \"Ingredients\" WHERE \"Id\" = {item.IngredientId} AND \"BranchId\" = {dto.BranchId} FOR UPDATE",
                 cancellationToken);
@@ -116,6 +148,7 @@ public class PurchaseService : IPurchaseService
                 PerformedByUserId = dto.PerformedByUserId,
                 TerminalId = dto.TerminalId,
                 TerminalCode = dto.TerminalCode,
+                IdempotencyKey = $"{dto.IdempotencyKey}:{movementIndex}",
                 TransactionType = InventoryTransactionType.Purchase,
                 QuantityChanged = item.Quantity,
                 ReferenceId = purchase.Id
@@ -131,6 +164,7 @@ public class PurchaseService : IPurchaseService
             throw new BusinessException("Inventory was already created for one of the selected ingredients. Refresh the page and try again.", innerException: ex);
         }
 
+        await _idempotencyService.CompleteAsync(idempotency.Record, nameof(Purchase), purchase.Id, StatusCodes.Status200OK, purchase.Id.ToString(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return purchase.Id;
     }
@@ -141,7 +175,7 @@ public class PurchaseService : IPurchaseService
             x.Id == dto.UserSessionId &&
             x.UserId == dto.PerformedByUserId &&
             x.BranchId == dto.BranchId &&
-            x.Status == SessionStatus.Active, cancellationToken)
+            (x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened), cancellationToken)
             ?? throw new BusinessException("Start or continue an active stock session before creating purchases.");
 
         if (!string.Equals(session.RoleName, "StockManager", StringComparison.OrdinalIgnoreCase))

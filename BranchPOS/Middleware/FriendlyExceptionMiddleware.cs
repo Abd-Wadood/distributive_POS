@@ -29,6 +29,18 @@ public class FriendlyExceptionMiddleware
             errorLoggingService.LogException(context, ex, message);
             await WriteFriendlyResponseAsync(context, StatusCodes.Status403Forbidden, message);
         }
+        catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            const string message = "Request body is too large. Please reduce the submitted data and try again.";
+            errorLoggingService.LogException(context, ex, message);
+            await WriteFriendlyResponseAsync(context, StatusCodes.Status413PayloadTooLarge, message);
+        }
+        catch (OperationCanceledException ex) when (context.RequestAborted.IsCancellationRequested)
+        {
+            const string message = "Request timed out. Please try again.";
+            errorLoggingService.LogException(context, ex, message);
+            await WriteFriendlyResponseAsync(context, StatusCodes.Status503ServiceUnavailable, message);
+        }
         catch (Exception ex)
         {
             const string message = "Something went wrong. Please try again. Contact administrator if the issue continues.";

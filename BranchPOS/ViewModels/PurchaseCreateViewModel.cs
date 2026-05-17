@@ -5,8 +5,13 @@ namespace BranchPOS.ViewModels;
 
 public class PurchaseCreateViewModel
 {
+    public string IdempotencyKey { get; set; } = string.Empty;
+
     [Range(1, int.MaxValue, ErrorMessage = "Supplier is required.")]
     public int SupplierId { get; set; }
+
+    [StringLength(80)]
+    public string? InvoiceNumber { get; set; }
 
     public List<SelectListItem> Suppliers { get; set; } = new();
 

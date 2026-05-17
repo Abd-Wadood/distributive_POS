@@ -16,7 +16,10 @@ public class UserSessionService : IUserSessionService
     private readonly ITerminalContextService _terminalContextService;
     private readonly ISessionCodeGeneratorService _sessionCodeGenerator;
     private readonly IAuditLogService _auditLogService;
+    private readonly IIdempotencyService _idempotencyService;
     private readonly PosOperationalOptions _options;
+    private static readonly SessionStatus[] OperationalStatuses = [SessionStatus.Active, SessionStatus.Reopened];
+    private static readonly SessionStatus[] BlockingStatuses = [SessionStatus.Active, SessionStatus.Reopened, SessionStatus.ClosingPending];
 
     public UserSessionService(
         AppDbContext context,
@@ -24,6 +27,7 @@ public class UserSessionService : IUserSessionService
         ITerminalContextService terminalContextService,
         ISessionCodeGeneratorService sessionCodeGenerator,
         IAuditLogService auditLogService,
+        IIdempotencyService idempotencyService,
         IOptions<PosOperationalOptions> options)
     {
         _context = context;
@@ -31,11 +35,17 @@ public class UserSessionService : IUserSessionService
         _terminalContextService = terminalContextService;
         _sessionCodeGenerator = sessionCodeGenerator;
         _auditLogService = auditLogService;
+        _idempotencyService = idempotencyService;
         _options = options.Value;
     }
 
     public async Task<UserSession> StartSessionAsync(StartSessionDto dto, CancellationToken cancellationToken = default)
     {
+        if (dto.OpeningCashAmount < 0)
+        {
+            throw new PosValidationException("Opening cash amount cannot be negative.");
+        }
+
         if (dto.TerminalId <= 0 || string.IsNullOrWhiteSpace(dto.TerminalCode))
         {
             throw new BusinessException("Terminal is not registered. Register this terminal before starting a session.");
@@ -45,11 +55,59 @@ public class UserSessionService : IUserSessionService
 
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         await _context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtext({0}))", [dto.UserId], cancellationToken);
-
-        var active = await GetActiveSessionAsync(dto.UserId, cancellationToken);
-        if (active is not null)
+        await _context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(hashtext({0}))", [$"terminal:{dto.TerminalId}"], cancellationToken);
+        var idempotencyHash = _idempotencyService.HashPayload(new
         {
-            throw new BusinessException($"You already have an active session ({active.SessionCode}). Continue or end it before starting a new session.");
+            dto.UserId,
+            dto.BranchId,
+            dto.RoleName,
+            dto.TerminalId,
+            dto.TerminalCode,
+            dto.OpeningCashAmount
+        });
+        var idempotency = await _idempotencyService.BeginAsync("SessionStart", dto.IdempotencyKey, idempotencyHash, dto.UserId, dto.BranchId, dto.TerminalId, cancellationToken);
+        if (!idempotency.IsOwner)
+        {
+            if (!string.IsNullOrWhiteSpace(idempotency.ErrorMessage))
+            {
+                throw new BusinessException(idempotency.ErrorMessage);
+            }
+
+            if (idempotency.Record.ResourceId.HasValue)
+            {
+                var existing = await _context.UserSessions.Include(x => x.Branch).FirstOrDefaultAsync(x => x.Id == idempotency.Record.ResourceId.Value, cancellationToken)
+                    ?? throw new PosNotFoundException("The previous session result was not found. Refresh and try again.");
+                await transaction.CommitAsync(cancellationToken);
+                return existing;
+            }
+
+            throw new BusinessException("This request is already being processed. Please wait.");
+        }
+
+        var existingUserSession = await _context.UserSessions
+            .Include(x => x.Branch)
+            .FirstOrDefaultAsync(x => x.UserId == dto.UserId && BlockingStatuses.Contains(x.Status), cancellationToken);
+        if (existingUserSession is not null)
+        {
+            await _auditLogService.LogAsync("SessionStartBlockedActiveSessionExists", nameof(UserSession), existingUserSession.Id.ToString(), null,
+                new { existingUserSession.SessionCode, existingUserSession.Status, existingUserSession.BranchId, existingUserSession.TerminalId },
+                existingUserSession.BranchId, existingUserSession.TerminalId, dto.UserId, cancellationToken);
+            await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), existingUserSession.Id, StatusCodes.Status200OK, existingUserSession.SessionCode, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return existingUserSession;
+        }
+
+        var existingTerminalSession = await _context.UserSessions
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.TerminalId == dto.TerminalId && BlockingStatuses.Contains(x.Status), cancellationToken);
+        if (existingTerminalSession is not null)
+        {
+            await _auditLogService.LogAsync("SessionStartBlockedTerminalActive", nameof(UserSession), existingTerminalSession.Id.ToString(), null,
+                new { existingTerminalSession.SessionCode, existingTerminalSession.Status, existingTerminalSession.UserId, existingTerminalSession.TerminalId },
+                existingTerminalSession.BranchId, existingTerminalSession.TerminalId, dto.UserId, cancellationToken);
+            await _idempotencyService.FailAsync(idempotency.Record, "Terminal already has an active session.", cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            throw new BusinessException($"Terminal {dto.TerminalCode} already has an active session ({existingTerminalSession.SessionCode}). Continue or close that session before starting another.");
         }
 
         var session = new UserSession
@@ -61,6 +119,8 @@ public class UserSessionService : IUserSessionService
             TerminalName = string.IsNullOrWhiteSpace(dto.TerminalName) ? Environment.MachineName : dto.TerminalName.Trim(),
             TerminalId = dto.TerminalId,
             TerminalCode = dto.TerminalCode,
+            OpeningCashAmount = dto.OpeningCashAmount,
+            IdempotencyKey = dto.IdempotencyKey,
             Notes = dto.Notes
         };
 
@@ -68,16 +128,17 @@ public class UserSessionService : IUserSessionService
         try
         {
             await _context.SaveChangesAsync(cancellationToken);
+            await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), session.Id, StatusCodes.Status200OK, session.SessionCode, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            throw DatabaseErrorTranslator.ToUserException(ex, "You already have an active session. Continue or end it before starting a new session.");
+            throw DatabaseErrorTranslator.ToUserException(ex, "A session is already active for this user or terminal. Continue or close it before starting another.");
         }
 
         await HeartbeatAsync(session.Id, session.TerminalName, cancellationToken);
         await _auditLogService.LogAsync("SessionStarted", nameof(UserSession), session.Id.ToString(), null,
-            new { session.SessionCode, session.BranchId, session.TerminalId, session.TerminalCode, session.RoleName },
+            new { session.SessionCode, session.BranchId, session.TerminalId, session.TerminalCode, session.RoleName, session.OpeningCashAmount },
             session.BranchId, session.TerminalId, session.UserId, cancellationToken);
         return session;
     }
@@ -85,14 +146,22 @@ public class UserSessionService : IUserSessionService
     public Task<UserSession?> GetActiveSessionAsync(string userId, CancellationToken cancellationToken = default) =>
         _context.UserSessions
             .Include(x => x.Branch)
-            .Where(x => x.UserId == userId && x.Status == SessionStatus.Active)
+            .Where(x => x.UserId == userId && BlockingStatuses.Contains(x.Status))
             .OrderByDescending(x => x.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public Task<UserSession?> GetInterruptedSessionAsync(string userId, CancellationToken cancellationToken = default) =>
+    public Task<UserSession?> GetAbandonedSessionAsync(string userId, CancellationToken cancellationToken = default) =>
         _context.UserSessions
             .Include(x => x.Branch)
-            .Where(x => x.UserId == userId && x.Status == SessionStatus.Interrupted)
+            .Where(x => x.UserId == userId && x.Status == SessionStatus.Abandoned)
+            .OrderByDescending(x => x.StartedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<UserSession?> GetActiveSessionForTerminalAsync(int terminalId, CancellationToken cancellationToken = default) =>
+        _context.UserSessions
+            .Include(x => x.Branch)
+            .Include(x => x.User)
+            .Where(x => x.TerminalId == terminalId && BlockingStatuses.Contains(x.Status))
             .OrderByDescending(x => x.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -101,7 +170,7 @@ public class UserSessionService : IUserSessionService
         var session = await _context.UserSessions.FirstOrDefaultAsync(x =>
             x.Id == sessionId &&
             x.UserId == userId &&
-            (x.Status == SessionStatus.Active || x.Status == SessionStatus.Interrupted), cancellationToken);
+            (x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened || x.Status == SessionStatus.Abandoned), cancellationToken);
 
         if (session is null)
         {
@@ -129,7 +198,7 @@ public class UserSessionService : IUserSessionService
             session.TerminalName = terminal.Name;
         }
 
-        session.Status = SessionStatus.Active;
+        session.Status = session.Status == SessionStatus.Abandoned ? SessionStatus.Reopened : session.Status;
         session.EndedAt = null;
         try
         {
@@ -147,50 +216,183 @@ public class UserSessionService : IUserSessionService
         return session;
     }
 
-    public async Task EndSessionAsync(int sessionId, string userId, CancellationToken cancellationToken = default)
+    public async Task<SessionCloseViewModel> GetCloseSessionAsync(int sessionId, string userId, bool isManagerOrAdmin, CancellationToken cancellationToken = default)
     {
-        var session = await _context.UserSessions.FirstOrDefaultAsync(x =>
-            x.Id == sessionId &&
-            x.UserId == userId &&
-            x.Status == SessionStatus.Active, cancellationToken);
-
-        if (session is null)
-        {
-            throw new PosNotFoundException("Active session was not found. Start or resume a session first.");
-        }
-
-        var activeDrafts = await _context.Orders.CountAsync(x =>
-            x.UserSessionId == session.Id &&
-            x.OrderStatus == OrderStatus.Draft, cancellationToken);
-
-        if (activeDrafts > 0)
-        {
-            throw new BusinessException("Complete or cancel active draft orders before ending the session.");
-        }
-
-        var oldValues = new { session.Status, session.EndedAt };
-        session.Status = SessionStatus.Ended;
-        session.EndedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync(cancellationToken);
-        await _auditLogService.LogAsync("SessionEnded", nameof(UserSession), session.Id.ToString(), oldValues,
-            new { session.Status, session.EndedAt },
-            session.BranchId, session.TerminalId, session.UserId, cancellationToken);
+        var session = await GetClosableSessionAsync(sessionId, userId, isManagerOrAdmin, cancellationToken);
+        return await BuildCloseViewModelAsync(session, cancellationToken);
     }
 
-    public async Task MarkInterruptedSessionsAsync(TimeSpan? staleAfter = null, CancellationToken cancellationToken = default)
+    public async Task<UserSession> CloseSessionAsync(CloseSessionDto dto, CancellationToken cancellationToken = default)
+    {
+        if (!string.Equals(dto.ConfirmationText?.Trim(), "END", StringComparison.Ordinal))
+        {
+            throw new PosValidationException("Type END to confirm session closing.");
+        }
+
+        if (dto.CountedClosingCash < 0)
+        {
+            throw new PosValidationException("Counted closing cash cannot be negative.");
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        var session = await GetClosableSessionAsync(dto.SessionId, dto.UserId, dto.IsManagerOrAdmin, cancellationToken);
+        var closeHash = _idempotencyService.HashPayload(new
+        {
+            dto.SessionId,
+            dto.UserId,
+            dto.TerminalId,
+            dto.TerminalCode,
+            dto.CountedClosingCash,
+            dto.ForceClose
+        });
+        var idempotency = await _idempotencyService.BeginAsync("SessionClose", dto.IdempotencyKey, closeHash, dto.UserId, session.BranchId, session.TerminalId, cancellationToken);
+        if (!idempotency.IsOwner)
+        {
+            if (!string.IsNullOrWhiteSpace(idempotency.ErrorMessage))
+            {
+                throw new BusinessException(idempotency.ErrorMessage);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return session;
+        }
+
+        await _auditLogService.LogAsync(dto.ForceClose ? "SessionForceCloseAttempted" : "SessionCloseAttempted", nameof(UserSession), session.Id.ToString(), null,
+            new { dto.CountedClosingCash, dto.ForceClose, dto.IsManagerOrAdmin },
+            session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
+
+        var blockers = await GetCloseBlockersAsync(session.Id, cancellationToken);
+        if (blockers.Count > 0)
+        {
+            await _auditLogService.LogAsync("SessionCloseBlocked", nameof(UserSession), session.Id.ToString(), null,
+                new { Reasons = blockers },
+                session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
+            await _idempotencyService.FailAsync(idempotency.Record, string.Join(" ", blockers), cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            throw new BusinessException(string.Join(" ", blockers));
+        }
+
+        var expectedCash = await CalculateExpectedClosingCashAsync(session.Id, session.OpeningCashAmount, cancellationToken);
+        var difference = dto.CountedClosingCash - expectedCash;
+        var approvalReasons = await GetApprovalReasonsAsync(session, difference, dto, cancellationToken);
+
+        if (approvalReasons.Count > 0 && !dto.IsManagerOrAdmin)
+        {
+            var oldPendingValues = new { session.Status, session.RequiresManagerApproval, session.ClosingRequestedAt };
+            session.Status = SessionStatus.ClosingPending;
+            session.RequiresManagerApproval = true;
+            session.ClosingRequestedAt = DateTime.UtcNow;
+            session.CountedClosingCash = dto.CountedClosingCash;
+            session.ExpectedClosingCash = expectedCash;
+            session.CashDifference = difference;
+            await _context.SaveChangesAsync(cancellationToken);
+            await _auditLogService.LogAsync("SessionCloseBlockedApprovalRequired", nameof(UserSession), session.Id.ToString(), oldPendingValues,
+                new { session.Status, ApprovalReasons = approvalReasons, session.CountedClosingCash, session.ExpectedClosingCash, session.CashDifference },
+                session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
+            await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), session.Id, StatusCodes.Status202Accepted, session.SessionCode, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            throw new BusinessException($"Manager/admin approval is required before closing this session: {string.Join("; ", approvalReasons)}.");
+        }
+
+        var oldValues = new { session.Status, session.EndedAt, session.CountedClosingCash, session.ExpectedClosingCash, session.CashDifference, session.RequiresManagerApproval };
+        session.Status = dto.ForceClose ? SessionStatus.ForceClosed : SessionStatus.Closed;
+        session.EndedAt = DateTime.UtcNow;
+        session.ClosedByUserId = dto.UserId;
+        session.CloseIdempotencyKey = dto.IdempotencyKey;
+        session.CountedClosingCash = dto.CountedClosingCash;
+        session.ExpectedClosingCash = expectedCash;
+        session.CashDifference = difference;
+        session.RequiresManagerApproval = false;
+        await _context.SaveChangesAsync(cancellationToken);
+        if (difference != 0)
+        {
+            await _auditLogService.LogAsync("SessionCashDifferenceDetected", nameof(UserSession), session.Id.ToString(), null,
+                new { Difference = difference, Expected = expectedCash, Counted = dto.CountedClosingCash },
+                session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
+        }
+        await _auditLogService.LogAsync(dto.ForceClose ? "SessionForceClosed" : "SessionClosed", nameof(UserSession), session.Id.ToString(), oldValues,
+            new { session.Status, session.EndedAt, session.CountedClosingCash, session.ExpectedClosingCash, session.CashDifference },
+            session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
+        await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), session.Id, StatusCodes.Status200OK, session.SessionCode, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return session;
+    }
+
+    public async Task<UserSession> ReopenSessionAsync(ReopenSessionDto dto, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+        {
+            throw new PosValidationException("Reopen reason is required.");
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        var session = await _context.UserSessions
+            .Include(x => x.Branch)
+            .FirstOrDefaultAsync(x => x.Id == dto.SessionId, cancellationToken)
+            ?? throw new PosNotFoundException("Session was not found.");
+
+        if (session.Status is not SessionStatus.Closed and not SessionStatus.ForceClosed)
+        {
+            throw new BusinessException("Only a closed session can be reopened.");
+        }
+
+        if (session.TerminalId != dto.TerminalId || !string.Equals(session.TerminalCode, dto.TerminalCode, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Reopen must happen from the same terminal.");
+        }
+
+        if (session.StartedAt.ToLocalTime().Date != DateTime.Now.Date)
+        {
+            throw new BusinessException("Only same-day sessions can be reopened.");
+        }
+
+        var newerSessionExists = await _context.UserSessions.AnyAsync(x =>
+            x.TerminalId == session.TerminalId &&
+            x.StartedAt > session.StartedAt &&
+            x.Id != session.Id, cancellationToken);
+        if (newerSessionExists)
+        {
+            throw new BusinessException("This session cannot be reopened because a newer session has already started on this terminal.");
+        }
+
+        var blockingSession = await _context.UserSessions.AnyAsync(x =>
+            x.Id != session.Id &&
+            (x.UserId == session.UserId || x.TerminalId == session.TerminalId || (x.UserId == session.UserId && x.BranchId == session.BranchId)) &&
+            BlockingStatuses.Contains(x.Status), cancellationToken);
+        if (blockingSession)
+        {
+            throw new BusinessException("Close the current active session before reopening this one.");
+        }
+
+        var oldValues = new { session.Status, session.EndedAt, session.ReopenedAt, session.ReopenReason };
+        session.Status = SessionStatus.Reopened;
+        session.EndedAt = null;
+        session.ReopenedAt = DateTime.UtcNow;
+        session.ReopenedByUserId = dto.UserId;
+        session.ReopenReason = dto.Reason.Trim();
+        await _context.SaveChangesAsync(cancellationToken);
+        await _auditLogService.LogAsync("SessionReopened", nameof(UserSession), session.Id.ToString(), oldValues,
+            new { session.Status, session.ReopenedAt, session.ReopenReason },
+            session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return session;
+    }
+
+    public async Task MarkAbandonedSessionsAsync(TimeSpan? staleAfter = null, CancellationToken cancellationToken = default)
     {
         var cutoff = DateTime.UtcNow - (staleAfter ?? _options.SessionStaleTimeout);
         var staleSessions = await _context.UserSessions
-            .Where(x => x.Status == SessionStatus.Active)
+            .Where(x => OperationalStatuses.Contains(x.Status))
             .Where(x => !_context.UserSessionHeartbeats.Any(h => h.UserSessionId == x.Id && h.LastSeenAt >= cutoff))
             .ToListAsync(cancellationToken);
 
         foreach (var session in staleSessions)
         {
-            session.Status = SessionStatus.Interrupted;
-            await _auditLogService.LogAsync("SessionInterrupted", nameof(UserSession), session.Id.ToString(),
-                new { Status = SessionStatus.Active },
-                new { Status = SessionStatus.Interrupted },
+            var oldStatus = session.Status;
+            session.Status = SessionStatus.Abandoned;
+            await _auditLogService.LogAsync("SessionAbandoned", nameof(UserSession), session.Id.ToString(),
+                new { Status = oldStatus },
+                new { Status = SessionStatus.Abandoned },
                 session.BranchId, session.TerminalId, session.UserId, cancellationToken);
         }
 
@@ -217,7 +419,10 @@ public class UserSessionService : IUserSessionService
                 .Where(x => x.Purchase!.UserSessionId == session.Id)
                 .SumAsync(x => x.Quantity * x.UnitCost, cancellationToken),
             InventoryAdjustmentsCount = await _context.InventoryTransactions.CountAsync(x => x.UserSessionId == session.Id && x.TransactionType == InventoryTransactionType.Adjustment, cancellationToken),
-            LowStockWarnings = await _context.Inventories.CountAsync(x => x.BranchId == session.BranchId && x.CurrentQuantity <= x.Ingredient!.MinimumStockLevel, cancellationToken)
+            LowStockWarnings = await _context.Inventories.CountAsync(x => x.BranchId == session.BranchId && x.CurrentQuantity <= x.Ingredient!.MinimumStockLevel, cancellationToken),
+            ExpectedClosingCash = session.ExpectedClosingCash ?? await CalculateExpectedClosingCashAsync(session.Id, session.OpeningCashAmount, cancellationToken),
+            CountedClosingCash = session.CountedClosingCash,
+            CashDifference = session.CashDifference
         };
     }
 
@@ -246,6 +451,108 @@ public class UserSessionService : IUserSessionService
         {
             _context.ChangeTracker.Clear();
         }
+    }
+
+    private async Task<UserSession> GetClosableSessionAsync(int sessionId, string userId, bool isManagerOrAdmin, CancellationToken cancellationToken)
+    {
+        var session = await _context.UserSessions
+            .Include(x => x.User)
+            .Include(x => x.Branch)
+            .FirstOrDefaultAsync(x => x.Id == sessionId && BlockingStatuses.Contains(x.Status), cancellationToken)
+            ?? throw new PosNotFoundException("Active session was not found. Start or resume a session first.");
+
+        if (!isManagerOrAdmin && session.UserId != userId)
+        {
+            throw new UnauthorizedAccessException("You can only close your own session.");
+        }
+
+        return session;
+    }
+
+    private async Task<SessionCloseViewModel> BuildCloseViewModelAsync(UserSession session, CancellationToken cancellationToken)
+    {
+        var completed = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed, cancellationToken);
+        var drafts = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Draft, cancellationToken);
+        var pending = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Pending, cancellationToken);
+        var unknownFinalize = await _context.Orders.CountAsync(x =>
+            x.UserSessionId == session.Id &&
+            (x.OrderStatus == OrderStatus.UnknownFinalize || x.OrderStatus == OrderStatus.ReceiptFailed), cancellationToken);
+        var sales = await _context.Orders
+            .Where(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed)
+            .SumAsync(x => x.TotalAmount, cancellationToken);
+        return new SessionCloseViewModel
+        {
+            Session = session,
+            CompletedOrdersCount = completed,
+            DraftOrdersCount = drafts,
+            PendingOrdersCount = pending,
+            UnknownFinalizeOrdersCount = unknownFinalize,
+            TotalOrders = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id, cancellationToken),
+            TotalSalesAmount = sales,
+            ExpectedClosingCash = session.OpeningCashAmount + sales,
+            CountedClosingCash = session.CountedClosingCash ?? 0
+        };
+    }
+
+    private async Task<List<string>> GetCloseBlockersAsync(int sessionId, CancellationToken cancellationToken)
+    {
+        var blockers = new List<string>();
+        var draftOrders = await _context.Orders.CountAsync(x => x.UserSessionId == sessionId && x.OrderStatus == OrderStatus.Draft, cancellationToken);
+        if (draftOrders > 0)
+        {
+            blockers.Add($"Complete or cancel {draftOrders} held/draft order(s) before closing.");
+        }
+
+        var pendingOrders = await _context.Orders.CountAsync(x => x.UserSessionId == sessionId && x.OrderStatus == OrderStatus.Pending, cancellationToken);
+        if (pendingOrders > 0)
+        {
+            blockers.Add($"Resolve {pendingOrders} payment-pending/unpaid order(s) before closing.");
+        }
+
+        var unknownFinalizeOrders = await _context.Orders.CountAsync(x =>
+            x.UserSessionId == sessionId &&
+            (x.OrderStatus == OrderStatus.UnknownFinalize || x.OrderStatus == OrderStatus.ReceiptFailed), cancellationToken);
+        if (unknownFinalizeOrders > 0)
+        {
+            blockers.Add($"Resolve {unknownFinalizeOrders} unknown finalize/failed receipt order(s) before closing.");
+        }
+
+        return blockers;
+    }
+
+    private async Task<decimal> CalculateExpectedClosingCashAsync(int sessionId, decimal openingCash, CancellationToken cancellationToken)
+    {
+        var completedSales = await _context.Orders
+            .Where(x => x.UserSessionId == sessionId && x.OrderStatus == OrderStatus.Completed)
+            .SumAsync(x => x.TotalAmount, cancellationToken);
+        return openingCash + completedSales;
+    }
+
+    private async Task<List<string>> GetApprovalReasonsAsync(UserSession session, decimal cashDifference, CloseSessionDto dto, CancellationToken cancellationToken)
+    {
+        var reasons = new List<string>();
+        if (Math.Abs(cashDifference) > _options.SessionCashDifferenceApprovalThreshold)
+        {
+            reasons.Add("cash difference is above the configured threshold");
+        }
+
+        if (DateTime.UtcNow - session.StartedAt < _options.MinimumSessionDurationBeforeClose)
+        {
+            reasons.Add("session was started less than 5 minutes ago");
+        }
+
+        var orderCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed, cancellationToken);
+        if (orderCount == 0)
+        {
+            reasons.Add("session has zero completed orders");
+        }
+
+        if (dto.ForceClose && session.UserId != dto.UserId)
+        {
+            reasons.Add("another user's session is being force-closed");
+        }
+
+        return reasons;
     }
 
     private static bool IsUniqueViolation(DbUpdateException ex) =>

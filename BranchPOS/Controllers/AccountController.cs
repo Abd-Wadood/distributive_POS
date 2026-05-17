@@ -4,6 +4,7 @@ using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace BranchPOS.Controllers;
@@ -13,12 +14,21 @@ public class AccountController : Controller
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITerminalContextService _terminalContextService;
+    private readonly ILoginSecurityService _loginSecurityService;
+    private readonly IAuditLogService _auditLogService;
 
-    public AccountController(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, ITerminalContextService terminalContextService)
+    public AccountController(
+        SignInManager<ApplicationUser> signInManager,
+        UserManager<ApplicationUser> userManager,
+        ITerminalContextService terminalContextService,
+        ILoginSecurityService loginSecurityService,
+        IAuditLogService auditLogService)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _terminalContextService = terminalContextService;
+        _loginSecurityService = loginSecurityService;
+        _auditLogService = auditLogService;
     }
 
     [AllowAnonymous]
@@ -27,8 +37,8 @@ public class AccountController : Controller
         return View(await BuildLoginModelAsync(new LoginViewModel(), returnUrl));
     }
 
-    [HttpPost, AllowAnonymous, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
+    [HttpPost, AllowAnonymous, ValidateAntiForgeryToken, EnableRateLimiting("LoginPolicy")]
+    public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null, CancellationToken cancellationToken = default)
     {
         if (!ModelState.IsValid)
         {
@@ -36,23 +46,33 @@ public class AccountController : Controller
         }
 
         var normalizedEmail = _userManager.NormalizeEmail(model.Email);
-        var user = await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail);
-        if (user is not null && !user.IsActive)
+        if (await _loginSecurityService.IsBlockedAsync(normalizedEmail ?? model.Email, cancellationToken))
         {
-            ModelState.AddModelError(string.Empty, "This account is inactive. Contact an administrator.");
+            ModelState.AddModelError(string.Empty, "Too many login attempts. Please wait and try again.");
             return View(await BuildLoginModelAsync(model, returnUrl));
         }
 
-        var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
+        var user = await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail);
+        if (user is not null && !user.IsActive)
+        {
+            await _loginSecurityService.RecordFailureAsync(normalizedEmail ?? model.Email, user.Id, cancellationToken);
+            ModelState.AddModelError(string.Empty, "Invalid login details or account temporarily locked.");
+            return View(await BuildLoginModelAsync(model, returnUrl));
+        }
+
+        var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
         if (result.Succeeded)
         {
             user ??= await _userManager.Users.Include(x => x.Branch).FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail);
             if (user is null)
             {
                 await _signInManager.SignOutAsync();
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+                await _loginSecurityService.RecordFailureAsync(normalizedEmail ?? model.Email, null, cancellationToken);
+                ModelState.AddModelError(string.Empty, "Invalid login details or account temporarily locked.");
                 return View(await BuildLoginModelAsync(model, returnUrl));
             }
+
+            await _loginSecurityService.RecordSuccessAsync(normalizedEmail ?? model.Email, user.Id, cancellationToken);
 
             var roles = await _userManager.GetRolesAsync(user);
             var isAdmin = roles.Contains("Admin");
@@ -85,13 +105,20 @@ public class AccountController : Controller
 
             if (isAdmin)
             {
+                await _auditLogService.LogSecurityAsync("AdminLogin", "Info", "Admin logged in.", user.Id, normalizedEmail, cancellationToken: cancellationToken);
                 return RedirectToAction("Index", "Home");
             }
 
             return LocalRedirect(SafeLocalUrl(returnUrl) ?? Url.Action("Index", "Home")!);
         }
 
-        ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+        await _loginSecurityService.RecordFailureAsync(normalizedEmail ?? model.Email, user?.Id, cancellationToken);
+        if (result.IsLockedOut || user is not null && await _userManager.IsLockedOutAsync(user))
+        {
+            await _auditLogService.LogSecurityAsync("AccountLocked", "Critical", "Account was temporarily locked after failed login attempts.", user?.Id, normalizedEmail, cancellationToken: cancellationToken);
+        }
+
+        ModelState.AddModelError(string.Empty, "Invalid login details or account temporarily locked.");
         return View(await BuildLoginModelAsync(model, returnUrl));
     }
 

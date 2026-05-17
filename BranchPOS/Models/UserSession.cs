@@ -8,6 +8,12 @@ public class UserSession
 
     public Guid PublicId { get; set; } = Guid.NewGuid();
 
+    [MaxLength(120)]
+    public string? IdempotencyKey { get; set; }
+
+    [MaxLength(120)]
+    public string? CloseIdempotencyKey { get; set; }
+
     [Required, MaxLength(50)]
     public string SessionCode { get; set; } = string.Empty;
 
@@ -37,6 +43,31 @@ public class UserSession
     public DateTime? EndedAt { get; set; }
 
     public SessionStatus Status { get; set; } = SessionStatus.Active;
+
+    public decimal OpeningCashAmount { get; set; }
+
+    public decimal? CountedClosingCash { get; set; }
+
+    public decimal? ExpectedClosingCash { get; set; }
+
+    public decimal? CashDifference { get; set; }
+
+    public bool RequiresManagerApproval { get; set; }
+
+    public DateTime? ClosingRequestedAt { get; set; }
+
+    public string? ClosedByUserId { get; set; }
+
+    public ApplicationUser? ClosedByUser { get; set; }
+
+    public string? ReopenedByUserId { get; set; }
+
+    public ApplicationUser? ReopenedByUser { get; set; }
+
+    public DateTime? ReopenedAt { get; set; }
+
+    [MaxLength(500)]
+    public string? ReopenReason { get; set; }
 
     [MaxLength(500)]
     public string? Notes { get; set; }

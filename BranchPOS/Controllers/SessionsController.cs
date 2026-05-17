@@ -6,6 +6,7 @@ using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BranchPOS.Controllers;
 
@@ -16,23 +17,25 @@ public class SessionsController : Controller
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
     private readonly IErrorLoggingService _errorLoggingService;
+    private readonly IIdempotencyService _idempotencyService;
 
-    public SessionsController(IBranchService branchService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService)
+    public SessionsController(IBranchService branchService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService, IIdempotencyService idempotencyService)
     {
         _branchService = branchService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
         _errorLoggingService = errorLoggingService;
+        _idempotencyService = idempotencyService;
     }
 
     [Authorize(Roles = "Cashier,StockManager")]
     public async Task<IActionResult> Index()
     {
-        await _userSessionService.MarkInterruptedSessionsAsync();
+        await _userSessionService.MarkAbandonedSessionsAsync();
         var userId = GetUserId();
         var branches = await _branchService.GetBranchesForUserAsync(userId);
         var active = await _userSessionService.GetActiveSessionAsync(userId);
-        var interrupted = await _userSessionService.GetInterruptedSessionAsync(userId);
+        var abandoned = await _userSessionService.GetAbandonedSessionAsync(userId);
         var role = User.IsInRole("Cashier") ? "Cashier" : User.IsInRole("StockManager") ? "StockManager" : "Admin";
         var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
         var canAccessTerminalBranch = branches.Any(x => x.Id == terminal.BranchId);
@@ -40,9 +43,10 @@ public class SessionsController : Controller
         return View(new SessionStartViewModel
         {
             ActiveSession = active,
-            InterruptedSession = interrupted,
+            AbandonedSession = abandoned,
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             RoleName = role,
-            BranchId = active?.BranchId ?? interrupted?.BranchId ?? terminal.BranchId,
+            BranchId = active?.BranchId ?? abandoned?.BranchId ?? terminal.BranchId,
             TerminalName = terminal.Name,
             TerminalCode = terminal.TerminalCode,
             TerminalBranchName = terminal.Branch?.Name ?? "",
@@ -54,30 +58,31 @@ public class SessionsController : Controller
         });
     }
 
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager"), EnableRateLimiting("SessionStartPolicy"), RequestSizeLimit(32768)]
     public async Task<IActionResult> Start(SessionStartViewModel model)
     {
         var userId = GetUserId();
-        var activeSession = await _userSessionService.GetActiveSessionAsync(userId);
-        if (activeSession is not null)
-        {
-            TempData["Error"] = $"You already have an active session ({activeSession.SessionCode}). Continue or end it before starting a new session.";
-            return RedirectToAction(nameof(Index));
-        }
 
         try
         {
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
-            await _userSessionService.StartSessionAsync(new StartSessionDto
+            var role = User.IsInRole("Cashier") ? "Cashier" : "StockManager";
+            var session = await _userSessionService.StartSessionAsync(new StartSessionDto
             {
                 UserId = userId,
+                IdempotencyKey = string.IsNullOrWhiteSpace(model.IdempotencyKey) ? _idempotencyService.GetOrCreateKey() : model.IdempotencyKey,
                 BranchId = terminal.BranchId,
-                RoleName = model.RoleName,
+                RoleName = role,
                 TerminalId = terminal.Id,
                 TerminalCode = terminal.TerminalCode,
                 TerminalName = terminal.Name,
+                OpeningCashAmount = model.OpeningCashAmount,
                 Notes = model.Notes
             });
+            if (session.StartedAt < DateTime.UtcNow.AddSeconds(-5))
+            {
+                TempData["Message"] = $"Continuing existing session {session.SessionCode}.";
+            }
         }
         catch (InvalidOperationException ex)
         {
@@ -116,20 +121,14 @@ public class SessionsController : Controller
         }
     }
 
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
-    public async Task<IActionResult> End(int sessionId)
+    [HttpGet, Authorize(Roles = "Cashier,StockManager,Admin")]
+    public async Task<IActionResult> Close(int sessionId)
     {
         try
         {
-            await _terminalContextService.RequireCurrentTerminalAsync();
-            await _userSessionService.EndSessionAsync(sessionId, GetUserId());
-
-            if (User.IsInRole("Admin"))
-            {
-                return RedirectToAction(nameof(Summary), new { id = sessionId });
-            }
-
-            return RedirectToAction(nameof(Index));
+            var model = await _userSessionService.GetCloseSessionAsync(sessionId, GetUserId(), IsManagerOrAdmin());
+            model.IdempotencyKey = Guid.NewGuid().ToString("N");
+            return View(model);
         }
         catch (InvalidOperationException ex)
         {
@@ -144,13 +143,79 @@ public class SessionsController : Controller
         }
     }
 
-    [Authorize(Roles = "Admin")]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager,Admin")]
+    public async Task<IActionResult> Close(SessionCloseViewModel model, bool forceClose = false)
+    {
+        try
+        {
+            var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
+            var session = await _userSessionService.CloseSessionAsync(new CloseSessionDto
+            {
+                SessionId = model.Session.Id,
+                IdempotencyKey = string.IsNullOrWhiteSpace(model.IdempotencyKey) ? _idempotencyService.GetOrCreateKey() : model.IdempotencyKey,
+                UserId = GetUserId(),
+                TerminalId = terminal.Id,
+                TerminalCode = terminal.TerminalCode,
+                CountedClosingCash = model.CountedClosingCash,
+                ConfirmationText = model.ConfirmationText,
+                IsManagerOrAdmin = IsManagerOrAdmin(),
+                ForceClose = forceClose
+            });
+
+            TempData["Success"] = $"Session {session.SessionCode} closed.";
+            return RedirectToAction(nameof(Summary), new { id = session.Id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var message = ToUserMessage(ex);
+            ModelState.AddModelError(string.Empty, message);
+            try
+            {
+                var closeModel = await _userSessionService.GetCloseSessionAsync(model.Session.Id, GetUserId(), IsManagerOrAdmin());
+                closeModel.CountedClosingCash = model.CountedClosingCash;
+                closeModel.ConfirmationText = model.ConfirmationText;
+                closeModel.IdempotencyKey = model.IdempotencyKey;
+                return View(closeModel);
+            }
+            catch
+            {
+                TempData["Error"] = message;
+                return RedirectToAction(nameof(Index));
+            }
+        }
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "StockManager,Admin")]
+    public async Task<IActionResult> Reopen(int sessionId, string reason)
+    {
+        try
+        {
+            var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
+            var session = await _userSessionService.ReopenSessionAsync(new ReopenSessionDto
+            {
+                SessionId = sessionId,
+                UserId = GetUserId(),
+                TerminalId = terminal.Id,
+                TerminalCode = terminal.TerminalCode,
+                Reason = reason
+            });
+            TempData["Success"] = $"Session {session.SessionCode} reopened.";
+            return RedirectToAction(nameof(Summary), new { id = session.Id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ToUserMessage(ex);
+            return RedirectToAction(nameof(Summary), new { id = sessionId });
+        }
+    }
+
+    [Authorize(Roles = "Cashier,StockManager,Admin")]
     public async Task<IActionResult> Summary(int id)
     {
         return View(await _userSessionService.GetSessionSummaryAsync(id));
     }
 
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager")]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager"), EnableRateLimiting("TerminalHeartbeatPolicy"), RequestSizeLimit(8192)]
     public async Task<IActionResult> Heartbeat(int sessionId, string terminalName)
     {
         await _userSessionService.HeartbeatAsync(sessionId, terminalName);
@@ -160,6 +225,9 @@ public class SessionsController : Controller
 
     private string GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Authenticated user was not found.");
+
+    private bool IsManagerOrAdmin() =>
+        User.IsInRole("Admin") || User.IsInRole("StockManager");
 
     private string ToUserMessage(InvalidOperationException ex)
     {

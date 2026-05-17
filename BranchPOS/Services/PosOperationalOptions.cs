@@ -13,4 +13,8 @@ public class PosOperationalOptions
     public bool RequireSecureTerminalCookieInProduction { get; set; } = true;
 
     public bool AllowSessionResumeFromDifferentTerminal { get; set; }
+
+    public decimal SessionCashDifferenceApprovalThreshold { get; set; } = 100m;
+
+    public TimeSpan MinimumSessionDurationBeforeClose { get; set; } = TimeSpan.FromMinutes(5);
 }

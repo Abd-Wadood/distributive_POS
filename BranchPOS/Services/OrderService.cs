@@ -13,14 +13,16 @@ public class OrderService : IOrderService
     private readonly ICustomerService _customerService;
     private readonly IUserSessionService _userSessionService;
     private readonly IBranchContextService _branchContextService;
+    private readonly IIdempotencyService _idempotencyService;
     private const int MaxOrderItemQuantity = 10000;
 
-    public OrderService(AppDbContext context, ICustomerService customerService, IUserSessionService userSessionService, IBranchContextService branchContextService)
+    public OrderService(AppDbContext context, ICustomerService customerService, IUserSessionService userSessionService, IBranchContextService branchContextService, IIdempotencyService idempotencyService)
     {
         _context = context;
         _customerService = customerService;
         _userSessionService = userSessionService;
         _branchContextService = branchContextService;
+        _idempotencyService = idempotencyService;
     }
 
     public async Task<List<Order>> GetOrdersAsync(CancellationToken cancellationToken = default)
@@ -82,6 +84,39 @@ public class OrderService : IOrderService
             dto.TerminalId = session.TerminalId;
             dto.TerminalCode = session.TerminalCode;
             dto.Customer.BranchId = session.BranchId;
+            var idempotencyHash = _idempotencyService.HashPayload(new
+            {
+                dto.DraftOrderId,
+                dto.CashierId,
+                dto.BranchId,
+                dto.UserSessionId,
+                dto.TerminalId,
+                dto.OrderType,
+                dto.DiscountAmount,
+                dto.TableNumber,
+                dto.Notes,
+                Customer = dto.Customer,
+                Items = dto.Items.OrderBy(x => x.ProductId).Select(x => new { x.ProductId, x.Quantity })
+            });
+            var idempotency = await _idempotencyService.BeginAsync("OrderFinalize", dto.IdempotencyKey, idempotencyHash, dto.CashierId, dto.BranchId, dto.TerminalId, cancellationToken);
+            if (!idempotency.IsOwner)
+            {
+                if (!string.IsNullOrWhiteSpace(idempotency.ErrorMessage))
+                {
+                    throw new BusinessException(idempotency.ErrorMessage);
+                }
+
+                if (idempotency.Record.Status == IdempotencyStatus.Completed && idempotency.Record.ResourceId.HasValue)
+                {
+                    var existingOrder = await _context.Orders.FirstOrDefaultAsync(x => x.Id == idempotency.Record.ResourceId.Value, cancellationToken)
+                        ?? throw new PosNotFoundException("The previous order result was not found. Refresh and try again.");
+                    await transaction.CommitAsync(cancellationToken);
+                    return ToResult(existingOrder);
+                }
+
+                throw new BusinessException("This request is already being processed. Please wait.");
+            }
+
             var orderType = ParseOrderType(dto.OrderType);
             ValidateCustomerRules(orderType, dto.Customer);
             var requestedItems = NormalizeItems(dto.Items);
@@ -111,8 +146,10 @@ public class OrderService : IOrderService
                 CashierId = dto.CashierId,
                 BranchId = dto.BranchId,
                 UserSessionId = dto.UserSessionId,
-                OrderNumber = await GenerateOrderNumberAsync(dto.BranchId, cancellationToken)
+                OrderNumber = await GenerateOrderNumberAsync(dto.BranchId, cancellationToken),
+                IdempotencyKey = dto.IdempotencyKey
             };
+            order.IdempotencyKey ??= dto.IdempotencyKey;
 
             ApplyOrderFields(order, orderType, OrderStatus.Completed, customer, dto);
             ReplaceOrderItems(order, pricedItems);
@@ -137,6 +174,7 @@ public class OrderService : IOrderService
                     PerformedByUserId = dto.CashierId,
                     TerminalId = dto.TerminalId,
                     TerminalCode = dto.TerminalCode,
+                    IdempotencyKey = $"{dto.IdempotencyKey}:{required.Key}",
                     TransactionType = InventoryTransactionType.Sale,
                     QuantityChanged = -required.Value,
                     ReferenceId = order.Id
@@ -144,8 +182,15 @@ public class OrderService : IOrderService
             }
 
             await _context.SaveChangesAsync(cancellationToken);
+            await _idempotencyService.CompleteAsync(idempotency.Record, nameof(Order), order.Id, StatusCodes.Status200OK, order.OrderNumber, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return ToResult(order);
+        }
+        catch (Exception ex) when (ex is BranchPosException)
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+            _context.ChangeTracker.Clear();
+            throw;
         }
         catch (Exception ex) when (ex is not BranchPosException && DatabaseErrorTranslator.IsConcurrencyFailure(ex))
         {
@@ -441,6 +486,11 @@ public class OrderService : IOrderService
         if (!string.Equals(activeSession.RoleName, "Cashier", StringComparison.OrdinalIgnoreCase))
         {
             throw new BusinessException("Active cashier session is required for order finalization.");
+        }
+
+        if (activeSession.Status is not SessionStatus.Active and not SessionStatus.Reopened)
+        {
+            throw new BusinessException("This cashier session is closing or unavailable. Continue or resolve the session before creating orders.");
         }
 
         if (userSessionId > 0 && activeSession.Id != userSessionId)

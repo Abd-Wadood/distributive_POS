@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace BranchPOS.Models;
 
 public class InventoryTransaction
@@ -5,6 +7,9 @@ public class InventoryTransaction
     public int Id { get; set; }
 
     public Guid PublicId { get; set; } = Guid.NewGuid();
+
+    [MaxLength(120)]
+    public string? IdempotencyKey { get; set; }
 
     public int BranchId { get; set; }
 

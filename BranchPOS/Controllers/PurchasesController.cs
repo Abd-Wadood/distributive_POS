@@ -21,14 +21,16 @@ public class PurchasesController : Controller
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
     private readonly IErrorLoggingService _errorLoggingService;
+    private readonly IIdempotencyService _idempotencyService;
 
-    public PurchasesController(AppDbContext context, IPurchaseService purchaseService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService)
+    public PurchasesController(AppDbContext context, IPurchaseService purchaseService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService, IIdempotencyService idempotencyService)
     {
         _context = context;
         _purchaseService = purchaseService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
         _errorLoggingService = errorLoggingService;
+        _idempotencyService = idempotencyService;
     }
 
     public override void OnActionExecuting(ActionExecutingContext context)
@@ -60,7 +62,7 @@ public class PurchasesController : Controller
         }
 
         await EnsureDefaultSupplierAsync();
-        return View(await BuildModelAsync(new PurchaseCreateViewModel(), session.BranchId));
+        return View(await BuildModelAsync(new PurchaseCreateViewModel { IdempotencyKey = Guid.NewGuid().ToString("N") }, session.BranchId));
     }
 
     [HttpPost, ValidateAntiForgeryToken]
@@ -78,12 +80,14 @@ public class PurchasesController : Controller
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
             var dto = new CreatePurchaseDto
             {
+                IdempotencyKey = string.IsNullOrWhiteSpace(model.IdempotencyKey) ? _idempotencyService.GetOrCreateKey() : model.IdempotencyKey,
                 BranchId = session.BranchId,
                 UserSessionId = session.Id,
                 PerformedByUserId = GetUserId(),
                 TerminalId = terminal.Id,
                 TerminalCode = terminal.TerminalCode,
                 SupplierId = model.SupplierId,
+                InvoiceNumber = model.InvoiceNumber,
                 Items = model.Items
                     .Where(x => x.IngredientId > 0 && x.Quantity > 0)
                     .Select(x => new PurchaseItemDto { IngredientId = x.IngredientId, Quantity = x.Quantity, UnitCost = x.UnitCost })

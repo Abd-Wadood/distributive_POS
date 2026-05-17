@@ -21,4 +21,10 @@ public class SessionSummaryViewModel
     public int InventoryAdjustmentsCount { get; set; }
 
     public int LowStockWarnings { get; set; }
+
+    public decimal ExpectedClosingCash { get; set; }
+
+    public decimal? CountedClosingCash { get; set; }
+
+    public decimal? CashDifference { get; set; }
 }

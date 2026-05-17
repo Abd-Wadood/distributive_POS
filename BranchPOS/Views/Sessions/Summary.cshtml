@@ -11,6 +11,10 @@
     <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@Model.Session.Status</dd>
     <dt class="col-sm-3">Started</dt><dd class="col-sm-9">@Model.Session.StartedAt.ToLocalTime()</dd>
     <dt class="col-sm-3">Ended</dt><dd class="col-sm-9">@Model.Session.EndedAt?.ToLocalTime()</dd>
+    <dt class="col-sm-3">Opening cash</dt><dd class="col-sm-9">@Model.Session.OpeningCashAmount.ToString("0.00")</dd>
+    <dt class="col-sm-3">Expected closing cash</dt><dd class="col-sm-9">@Model.ExpectedClosingCash.ToString("0.00")</dd>
+    <dt class="col-sm-3">Counted closing cash</dt><dd class="col-sm-9">@Model.CountedClosingCash?.ToString("0.00")</dd>
+    <dt class="col-sm-3">Cash difference</dt><dd class="col-sm-9">@Model.CashDifference?.ToString("0.00")</dd>
 </dl>
 
 <div class="row g-3">
@@ -23,3 +27,17 @@
     <div class="col-md-3"><div class="card"><div class="card-body"><h6>Adjustments</h6><strong>@Model.InventoryAdjustmentsCount</strong></div></div></div>
     <div class="col-md-3"><div class="card"><div class="card-body"><h6>Low stock warnings</h6><strong>@Model.LowStockWarnings</strong></div></div></div>
 </div>
+
+@if ((User.IsInRole("Admin") || User.IsInRole("StockManager")) &&
+    (Model.Session.Status == BranchPOS.Models.SessionStatus.Closed || Model.Session.Status == BranchPOS.Models.SessionStatus.ForceClosed))
+{
+    <form asp-action="Reopen" method="post" class="card mt-3">
+        <div class="card-body">
+            <h5>Reopen last closed session / shift</h5>
+            <input type="hidden" name="sessionId" value="@Model.Session.Id" />
+            <label class="form-label" for="reason">Reason</label>
+            <input class="form-control" id="reason" name="reason" required maxlength="500" />
+            <button class="btn btn-warning mt-3" type="submit">Reopen session / shift</button>
+        </div>
+    </form>
+}

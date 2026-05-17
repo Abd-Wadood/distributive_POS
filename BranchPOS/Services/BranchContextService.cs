@@ -29,7 +29,7 @@ public class BranchContextService : IBranchContextService
     {
         var userId = GetUserId();
         var activeSession = await _context.UserSessions
-            .Where(x => x.UserId == userId && x.Status == SessionStatus.Active)
+            .Where(x => x.UserId == userId && (x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened))
             .OrderByDescending(x => x.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
 

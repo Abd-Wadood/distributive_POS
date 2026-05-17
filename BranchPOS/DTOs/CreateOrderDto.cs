@@ -4,6 +4,8 @@ namespace BranchPOS.DTOs;
 
 public class CreateOrderDto
 {
+    public string IdempotencyKey { get; set; } = string.Empty;
+
     public int? DraftOrderId { get; set; }
 
     public string CashierId { get; set; } = string.Empty;

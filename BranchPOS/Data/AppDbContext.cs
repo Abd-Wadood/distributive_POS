@@ -30,6 +30,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
     public DbSet<Terminal> Terminals => Set<Terminal>();
     public DbSet<TerminalHeartbeat> TerminalHeartbeats => Set<TerminalHeartbeat>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -125,6 +126,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         builder.Entity<InventoryTransaction>(entity =>
         {
             entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_InventoryTransactions_PublicId");
+            entity.HasIndex(x => x.IdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_InventoryTransactions_IdempotencyKey");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserSessionId);
@@ -165,11 +170,21 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         builder.Entity<Purchase>(entity =>
         {
             entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_Purchases_PublicId");
+            entity.HasIndex(x => x.IdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_Purchases_IdempotencyKey");
+            entity.HasIndex(x => new { x.SupplierId, x.InvoiceNumber })
+                .IsUnique()
+                .HasFilter("\"InvoiceNumber\" IS NOT NULL")
+                .HasDatabaseName("UX_Purchases_SupplierId_InvoiceNumber");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserSessionId);
             entity.HasIndex(x => x.CreatedAt);
             entity.Property(x => x.TerminalCode).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
+            entity.Property(x => x.InvoiceNumber).HasMaxLength(80);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -228,6 +243,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         builder.Entity<Order>(entity =>
         {
             entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_Orders_PublicId");
+            entity.HasIndex(x => x.IdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_Orders_IdempotencyKey");
             entity.HasIndex(x => new { x.BranchId, x.OrderNumber }).IsUnique().HasDatabaseName("UX_Orders_BranchId_OrderNumber");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
@@ -236,6 +255,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasIndex(x => new { x.BranchId, x.CompletedAt, x.OrderStatus }).HasDatabaseName("IX_Orders_BranchId_CompletedAt_OrderStatus");
             entity.HasIndex(x => x.OrderStatus);
             entity.Property(x => x.OrderNumber).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
             entity.Property(x => x.OrderType).HasConversion<string>().HasMaxLength(40);
             entity.Property(x => x.OrderStatus).HasConversion<string>().HasMaxLength(40);
             entity.Property(x => x.Subtotal).HasPrecision(18, 2);
@@ -290,7 +310,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<UserSession>(entity =>
         {
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_UserSessions_OpeningCashAmount_NonNegative", "\"OpeningCashAmount\" >= 0");
+                t.HasCheckConstraint("CK_UserSessions_CountedClosingCash_NonNegative", "\"CountedClosingCash\" IS NULL OR \"CountedClosingCash\" >= 0");
+            });
             entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_UserSessions_PublicId");
+            entity.HasIndex(x => x.IdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_UserSessions_IdempotencyKey");
+            entity.HasIndex(x => x.CloseIdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"CloseIdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_UserSessions_CloseIdempotencyKey");
             entity.HasIndex(x => x.SessionCode).IsUnique().HasDatabaseName("UX_UserSessions_SessionCode");
             entity.HasIndex(x => new { x.UserId, x.Status });
             entity.HasIndex(x => new { x.Status, x.StartedAt }).HasDatabaseName("IX_UserSessions_Status_StartedAt");
@@ -298,20 +331,42 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasIndex(x => x.TerminalId);
             entity.HasIndex(x => x.UserId)
                 .IsUnique()
-                .HasFilter("\"Status\" = 'Active'")
+                .HasFilter("\"Status\" IN ('Active', 'Reopened', 'ClosingPending')")
                 .HasDatabaseName("UX_UserSessions_UserId_Active");
+            entity.HasIndex(x => x.TerminalId)
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Active', 'Reopened', 'ClosingPending')")
+                .HasDatabaseName("UX_UserSessions_TerminalId_Active");
+            entity.HasIndex(x => new { x.UserId, x.BranchId })
+                .IsUnique()
+                .HasFilter("\"Status\" IN ('Active', 'Reopened', 'ClosingPending')")
+                .HasDatabaseName("UX_UserSessions_UserId_BranchId_Active");
             entity.HasIndex(x => x.BranchId);
-            entity.HasIndex(x => x.TerminalId);
             entity.Property(x => x.SessionCode).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
+            entity.Property(x => x.CloseIdempotencyKey).HasMaxLength(120);
             entity.Property(x => x.RoleName).HasMaxLength(40).IsRequired();
             entity.Property(x => x.TerminalName).HasMaxLength(120).IsRequired();
             entity.Property(x => x.TerminalCode).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.Property(x => x.OpeningCashAmount).HasPrecision(18, 2);
+            entity.Property(x => x.CountedClosingCash).HasPrecision(18, 2);
+            entity.Property(x => x.ExpectedClosingCash).HasPrecision(18, 2);
+            entity.Property(x => x.CashDifference).HasPrecision(18, 2);
+            entity.Property(x => x.ReopenReason).HasMaxLength(500);
             entity.HasOne(x => x.User)
                 .WithMany(x => x.UserSessions)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ClosedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ClosedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.ReopenedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ReopenedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -376,13 +431,47 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => new { x.EntityName, x.EntityId });
             entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => new { x.EventType, x.CreatedAt }).HasDatabaseName("IX_AuditLogs_EventType_CreatedAt");
+            entity.HasIndex(x => new { x.IpAddress, x.CreatedAt }).HasDatabaseName("IX_AuditLogs_IpAddress_CreatedAt");
+            entity.HasIndex(x => new { x.UserId, x.CreatedAt }).HasDatabaseName("IX_AuditLogs_UserId_CreatedAt");
+            entity.HasIndex(x => new { x.Severity, x.CreatedAt }).HasDatabaseName("IX_AuditLogs_Severity_CreatedAt");
             entity.Property(x => x.Action).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.EventType).HasMaxLength(120);
+            entity.Property(x => x.Severity).HasMaxLength(40);
+            entity.Property(x => x.Message).HasMaxLength(500);
+            entity.Property(x => x.AttemptedUserName).HasMaxLength(256);
             entity.Property(x => x.EntityName).HasMaxLength(120).IsRequired();
             entity.Property(x => x.EntityId).HasMaxLength(80);
             entity.Property(x => x.OldValues).HasColumnType("jsonb");
             entity.Property(x => x.NewValues).HasColumnType("jsonb");
             entity.Property(x => x.IpAddress).HasMaxLength(80);
             entity.Property(x => x.UserAgent).HasMaxLength(500);
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Terminal)
+                .WithMany()
+                .HasForeignKey(x => x.TerminalId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<IdempotencyRecord>(entity =>
+        {
+            entity.HasIndex(x => x.IdempotencyKey).IsUnique().HasDatabaseName("UX_IdempotencyRecords_IdempotencyKey");
+            entity.HasIndex(x => new { x.OperationType, x.IdempotencyKey }).IsUnique().HasDatabaseName("UX_IdempotencyRecords_OperationType_IdempotencyKey");
+            entity.HasIndex(x => new { x.Status, x.CreatedAt }).HasDatabaseName("IX_IdempotencyRecords_Status_CreatedAt");
+            entity.HasIndex(x => x.ExpiresAt).HasDatabaseName("IX_IdempotencyRecords_ExpiresAt");
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.OperationType).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.RequestHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ResourceType).HasMaxLength(80);
+            entity.Property(x => x.ResponseBodySummary).HasMaxLength(500);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
             entity.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.UserId)

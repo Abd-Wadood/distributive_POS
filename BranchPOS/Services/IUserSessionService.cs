@@ -10,13 +10,19 @@ public interface IUserSessionService
 
     Task<UserSession?> GetActiveSessionAsync(string userId, CancellationToken cancellationToken = default);
 
-    Task<UserSession?> GetInterruptedSessionAsync(string userId, CancellationToken cancellationToken = default);
+    Task<UserSession?> GetAbandonedSessionAsync(string userId, CancellationToken cancellationToken = default);
+
+    Task<UserSession?> GetActiveSessionForTerminalAsync(int terminalId, CancellationToken cancellationToken = default);
 
     Task<UserSession> ContinueSessionAsync(int sessionId, string userId, CancellationToken cancellationToken = default);
 
-    Task EndSessionAsync(int sessionId, string userId, CancellationToken cancellationToken = default);
+    Task<SessionCloseViewModel> GetCloseSessionAsync(int sessionId, string userId, bool isManagerOrAdmin, CancellationToken cancellationToken = default);
 
-    Task MarkInterruptedSessionsAsync(TimeSpan? staleAfter = null, CancellationToken cancellationToken = default);
+    Task<UserSession> CloseSessionAsync(CloseSessionDto dto, CancellationToken cancellationToken = default);
+
+    Task<UserSession> ReopenSessionAsync(ReopenSessionDto dto, CancellationToken cancellationToken = default);
+
+    Task MarkAbandonedSessionsAsync(TimeSpan? staleAfter = null, CancellationToken cancellationToken = default);
 
     Task<SessionSummaryViewModel> GetSessionSummaryAsync(int sessionId, CancellationToken cancellationToken = default);
 

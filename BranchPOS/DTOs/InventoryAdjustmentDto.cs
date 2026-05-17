@@ -4,6 +4,8 @@ namespace BranchPOS.DTOs;
 
 public class InventoryAdjustmentDto
 {
+    public string IdempotencyKey { get; set; } = string.Empty;
+
     public int BranchId { get; set; }
 
     public int UserSessionId { get; set; }

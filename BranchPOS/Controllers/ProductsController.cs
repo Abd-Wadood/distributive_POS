@@ -4,29 +4,34 @@ using BranchPOS.Services;
 using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "StockManager")]
+[Authorize(Roles = "StockManager,Cashier")]
 public class ProductsController : Controller
 {
     private readonly AppDbContext _context;
     private readonly IProductService _productService;
     private readonly IBranchContextService _branchContextService;
+    private readonly SecurityRateLimitOptions _limits;
 
-    public ProductsController(AppDbContext context, IProductService productService, IBranchContextService branchContextService)
+    public ProductsController(AppDbContext context, IProductService productService, IBranchContextService branchContextService, IOptions<SecurityRateLimitOptions> limits)
     {
         _context = context;
         _productService = productService;
         _branchContextService = branchContextService;
+        _limits = limits.Value;
     }
 
     public override void OnActionExecuting(ActionExecutingContext context)
     {
-        if (!User.IsInRole("StockManager"))
+        if (!string.Equals(context.ActionDescriptor.RouteValues["action"], nameof(Search), StringComparison.OrdinalIgnoreCase) &&
+            !User.IsInRole("StockManager"))
         {
             context.Result = Forbid();
             return;
@@ -39,6 +44,45 @@ public class ProductsController : Controller
     {
         var products = await _productService.GetProductsAsync();
         return View(products);
+    }
+
+    [HttpGet, Authorize(Roles = "Cashier,StockManager"), EnableRateLimiting("ProductSearchPolicy")]
+    public async Task<IActionResult> Search(string? q, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        var term = (q ?? string.Empty).Trim();
+        if (term.Length > 0 && term.Length < _limits.ProductSearchMinimumLength)
+        {
+            return Json(new { success = true, products = Array.Empty<object>(), page, pageSize = 0, total = 0 });
+        }
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, _limits.MaxProductSearchResults);
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
+        var query = _context.Products
+            .AsNoTracking()
+            .Include(x => x.Category)
+            .Where(x => x.BranchId == branchId && x.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            query = query.Where(x => EF.Functions.ILike(x.Name, $"%{term}%") || EF.Functions.ILike(x.Category!.Name, $"%{term}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var products = await query
+            .OrderBy(x => x.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                CategoryName = x.Category == null ? "" : x.Category.Name,
+                x.Price
+            })
+            .ToListAsync(cancellationToken);
+
+        return Json(new { success = true, products, page, pageSize, total });
     }
 
     [Authorize(Roles = "StockManager")]

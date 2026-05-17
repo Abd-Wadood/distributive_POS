@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using BranchPOS.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BranchPOS.Controllers;
 
@@ -20,6 +21,7 @@ public class OrdersController : Controller
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
     private readonly IErrorLoggingService _errorLoggingService;
+    private readonly IIdempotencyService _idempotencyService;
 
     public OrdersController(
         AppDbContext context,
@@ -27,7 +29,8 @@ public class OrdersController : Controller
         IProductAvailabilityService productAvailabilityService,
         IUserSessionService userSessionService,
         ITerminalContextService terminalContextService,
-        IErrorLoggingService errorLoggingService)
+        IErrorLoggingService errorLoggingService,
+        IIdempotencyService idempotencyService)
     {
         _context = context;
         _orderService = orderService;
@@ -35,6 +38,7 @@ public class OrdersController : Controller
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
         _errorLoggingService = errorLoggingService;
+        _idempotencyService = idempotencyService;
     }
 
     [Authorize(Roles = "Admin")]
@@ -93,6 +97,10 @@ public class OrdersController : Controller
             }
 
             dto.CashierId = GetCashierId();
+            if (string.IsNullOrWhiteSpace(dto.IdempotencyKey))
+            {
+                dto.IdempotencyKey = _idempotencyService.GetOrCreateKey();
+            }
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
             var session = await _userSessionService.GetActiveSessionAsync(dto.CashierId);
             if (session is null)
@@ -118,7 +126,7 @@ public class OrdersController : Controller
         }
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, EnableRateLimiting("OrderFinalizePolicy"), RequestSizeLimit(65536)]
     public async Task<IActionResult> Finalize([FromBody] CreateOrderDto dto)
     {
         try
@@ -130,6 +138,10 @@ public class OrdersController : Controller
             }
 
             dto.CashierId = GetCashierId();
+            if (string.IsNullOrWhiteSpace(dto.IdempotencyKey))
+            {
+                dto.IdempotencyKey = _idempotencyService.GetOrCreateKey();
+            }
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
             var session = await _userSessionService.GetActiveSessionAsync(dto.CashierId);
             if (session is null)

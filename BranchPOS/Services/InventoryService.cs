@@ -10,12 +10,14 @@ public class InventoryService : IInventoryService
 {
     private readonly AppDbContext _context;
     private readonly IBranchContextService _branchContextService;
+    private readonly IIdempotencyService _idempotencyService;
     private const decimal MaxInventoryMovementQuantity = 1_000_000m;
 
-    public InventoryService(AppDbContext context, IBranchContextService branchContextService)
+    public InventoryService(AppDbContext context, IBranchContextService branchContextService, IIdempotencyService idempotencyService)
     {
         _context = context;
         _branchContextService = branchContextService;
+        _idempotencyService = idempotencyService;
     }
 
     public async Task<List<Inventory>> GetInventoryAsync(CancellationToken cancellationToken = default)
@@ -57,6 +59,27 @@ public class InventoryService : IInventoryService
 
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         await ValidateActiveStockSessionAsync(dto, cancellationToken);
+        var idempotencyHash = _idempotencyService.HashPayload(new
+        {
+            dto.BranchId,
+            dto.UserSessionId,
+            dto.PerformedByUserId,
+            dto.TerminalId,
+            dto.IngredientId,
+            dto.QuantityChanged,
+            dto.Reason
+        });
+        var idempotency = await _idempotencyService.BeginAsync("InventoryAdjustment", dto.IdempotencyKey, idempotencyHash, dto.PerformedByUserId, dto.BranchId, dto.TerminalId, cancellationToken);
+        if (!idempotency.IsOwner)
+        {
+            if (!string.IsNullOrWhiteSpace(idempotency.ErrorMessage))
+            {
+                throw new BusinessException(idempotency.ErrorMessage);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
 
         var ingredientExists = await _context.Ingredients.AnyAsync(x =>
             x.Id == dto.IngredientId &&
@@ -90,11 +113,17 @@ public class InventoryService : IInventoryService
             PerformedByUserId = dto.PerformedByUserId,
             TerminalId = dto.TerminalId,
             TerminalCode = dto.TerminalCode,
+            IdempotencyKey = dto.IdempotencyKey,
             TransactionType = InventoryTransactionType.Adjustment,
             QuantityChanged = dto.QuantityChanged
         });
 
         await _context.SaveChangesAsync(cancellationToken);
+        var transactionId = await _context.InventoryTransactions
+            .Where(x => x.IdempotencyKey == dto.IdempotencyKey)
+            .Select(x => x.Id)
+            .FirstAsync(cancellationToken);
+        await _idempotencyService.CompleteAsync(idempotency.Record, nameof(InventoryTransaction), transactionId, StatusCodes.Status200OK, transactionId.ToString(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
 
@@ -104,7 +133,7 @@ public class InventoryService : IInventoryService
             x.Id == dto.UserSessionId &&
             x.UserId == dto.PerformedByUserId &&
             x.BranchId == dto.BranchId &&
-            x.Status == SessionStatus.Active, cancellationToken)
+            (x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened), cancellationToken)
             ?? throw new BusinessException("Start or continue an active stock session before adjusting inventory.");
 
         if (!string.Equals(session.RoleName, "StockManager", StringComparison.OrdinalIgnoreCase))

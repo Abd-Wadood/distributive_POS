@@ -11,6 +11,24 @@
     <span class="badge text-bg-secondary">@Model.Tables.Sum(x => x.RowCount) rows</span>
 </div>
 
+<form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label" for="pageSize">Page size</label>
+        <input id="pageSize" name="pageSize" class="form-control" type="number" min="1" max="200" value="@Model.PageSize" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label" for="from">From</label>
+        <input id="from" name="from" class="form-control" type="date" value="@Model.From?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label" for="to">To</label>
+        <input id="to" name="to" class="form-control" type="date" value="@Model.To?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary" type="submit">Apply</button>
+    </div>
+</form>
+
 <div class="accordion" id="reportTables">
     @for (var tableIndex = 0; tableIndex < Model.Tables.Count; tableIndex++)
     {

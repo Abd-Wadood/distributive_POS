@@ -1,0 +1,91 @@
+@model BranchPOS.ViewModels.SessionCloseViewModel
+@{
+    ViewData["Title"] = "Close session / shift";
+    var canForceClose = User.IsInRole("Admin") || User.IsInRole("StockManager");
+}
+
+<h1>Close session / shift</h1>
+
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="text-muted small">Cashier</div>
+                <strong>@(Model.Session.User?.Email ?? Model.Session.UserId)</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Branch</div>
+                <strong>@Model.Session.Branch?.Name</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Terminal</div>
+                <strong>@Model.Session.TerminalName (@Model.Session.TerminalCode)</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Start time</div>
+                <strong>@Model.Session.StartedAt.ToLocalTime()</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Total orders</div>
+                <strong>@Model.TotalOrders</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Opening cash</div>
+                <strong>@Model.Session.OpeningCashAmount.ToString("0.00")</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Completed orders</div>
+                <strong>@Model.CompletedOrdersCount</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Held/draft orders</div>
+                <strong>@Model.DraftOrdersCount</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Payment pending orders</div>
+                <strong>@Model.PendingOrdersCount</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">Unknown finalize / receipt issues</div>
+                <strong>@Model.UnknownFinalizeOrdersCount</strong>
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small">System expected cash</div>
+                <strong>@Model.ExpectedClosingCash.ToString("0.00")</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form asp-action="Close" method="post" class="card">
+    <div class="card-body">
+        <input type="hidden" asp-for="Session.Id" />
+        <input type="hidden" asp-for="IdempotencyKey" />
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label asp-for="CountedClosingCash" class="form-label">Counted closing cash</label>
+                <input asp-for="CountedClosingCash" class="form-control" type="number" min="0" step="0.01" />
+                <span asp-validation-for="CountedClosingCash" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Difference preview</label>
+                <input class="form-control" value="@Model.Difference.ToString("0.00")" readonly />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="ConfirmationText" class="form-label">Type END to close</label>
+                <input asp-for="ConfirmationText" class="form-control" autocomplete="off" />
+                <span asp-validation-for="ConfirmationText" class="text-danger"></span>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-danger" type="submit">Close session / shift</button>
+            @if (canForceClose)
+            {
+                <button class="btn btn-outline-danger" type="submit" name="forceClose" value="true">Force close</button>
+            }
+            <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+        </div>
+    </div>
+</form>

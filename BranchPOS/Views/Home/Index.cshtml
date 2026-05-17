@@ -319,6 +319,34 @@ else if (isAdmin && Model is not null)
                         <span class="badge text-bg-secondary">@Model.SecuritySummary.FailedLoginsToday</span>
                     </div>
                     <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Locked accounts</span>
+                        <span class="badge text-bg-warning">@Model.SecuritySummary.LockedAccounts</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Rate limit hits today</span>
+                        <span class="badge text-bg-warning">@Model.SecuritySummary.RateLimitHitsToday</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Suspicious IPs</span>
+                        <span class="badge text-bg-danger">@Model.SecuritySummary.SuspiciousIpsToday</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Repeated failures by username</span>
+                        <span class="badge text-bg-warning">@Model.SecuritySummary.RepeatedLoginFailuresByUsername</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Repeated failures by IP</span>
+                        <span class="badge text-bg-warning">@Model.SecuritySummary.RepeatedLoginFailuresByIp</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Heartbeat spam blocked</span>
+                        <span class="badge text-bg-secondary">@Model.SecuritySummary.TerminalHeartbeatSpamCount</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
+                        <span>Report spam blocked</span>
+                        <span class="badge text-bg-secondary">@Model.SecuritySummary.BlockedReportSpamCount</span>
+                    </div>
+                    <div class="d-flex justify-content-between border-bottom py-2">
                         <span>Unauthorized branch attempts</span>
                         <span class="badge text-bg-secondary">@Model.SecuritySummary.UnauthorizedAccessToday</span>
                     </div>

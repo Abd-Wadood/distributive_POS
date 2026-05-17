@@ -11,7 +11,7 @@
     {
         var layoutUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         layoutSession = await DbContext.UserSessions.Include(x => x.Branch)
-            .Where(x => x.UserId == layoutUserId && x.Status == SessionStatus.Active)
+            .Where(x => x.UserId == layoutUserId && (x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened))
             .OrderByDescending(x => x.StartedAt)
             .FirstOrDefaultAsync();
     }

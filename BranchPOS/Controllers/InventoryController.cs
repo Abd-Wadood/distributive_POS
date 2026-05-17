@@ -15,13 +15,15 @@ public class InventoryController : Controller
     private readonly IUserSessionService _userSessionService;
     private readonly ITerminalContextService _terminalContextService;
     private readonly IErrorLoggingService _errorLoggingService;
+    private readonly IIdempotencyService _idempotencyService;
 
-    public InventoryController(IInventoryService inventoryService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService)
+    public InventoryController(IInventoryService inventoryService, IUserSessionService userSessionService, ITerminalContextService terminalContextService, IErrorLoggingService errorLoggingService, IIdempotencyService idempotencyService)
     {
         _inventoryService = inventoryService;
         _userSessionService = userSessionService;
         _terminalContextService = terminalContextService;
         _errorLoggingService = errorLoggingService;
+        _idempotencyService = idempotencyService;
     }
 
     public override void OnActionExecuting(ActionExecutingContext context)
@@ -61,6 +63,10 @@ public class InventoryController : Controller
             }
 
             dto.BranchId = session.BranchId;
+            if (string.IsNullOrWhiteSpace(dto.IdempotencyKey))
+            {
+                dto.IdempotencyKey = _idempotencyService.GetOrCreateKey();
+            }
             dto.UserSessionId = session.Id;
             dto.PerformedByUserId = GetUserId();
             var terminal = await _terminalContextService.RequireCurrentTerminalAsync();

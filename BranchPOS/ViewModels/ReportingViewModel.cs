@@ -3,6 +3,14 @@ namespace BranchPOS.ViewModels;
 public class ReportingViewModel
 {
     public List<ReportTableViewModel> Tables { get; set; } = new();
+
+    public int Page { get; set; } = 1;
+
+    public int PageSize { get; set; } = 100;
+
+    public DateTime? From { get; set; }
+
+    public DateTime? To { get; set; }
 }
 
 public class ReportTableViewModel

@@ -9,6 +9,8 @@ namespace BranchPOS.Services;
 
 public class AdminDashboardService : IAdminDashboardService
 {
+    private const string AdminTerminalCode = "MAIN-01";
+
     private readonly AppDbContext _context;
     private readonly IMemoryCache _cache;
     private readonly DashboardOptions _options;
@@ -46,6 +48,7 @@ public class AdminDashboardService : IAdminDashboardService
 
         var terminalGroups = await _context.Terminals
             .AsNoTracking()
+            .Where(x => x.TerminalCode != AdminTerminalCode)
             .GroupBy(x => x.BranchId)
             .Select(x => new TerminalGroupRow
             {
@@ -58,13 +61,14 @@ public class AdminDashboardService : IAdminDashboardService
         var onlineTerminalGroups = await _context.TerminalHeartbeats
             .AsNoTracking()
             .Where(x => x.LastSeenAt >= onlineCutoff)
+            .Where(x => x.TerminalCode != AdminTerminalCode)
             .GroupBy(x => x.BranchId)
             .Select(x => new OnlineTerminalGroupRow { BranchId = x.Key, Online = x.Count() })
             .ToListAsync(cancellationToken);
 
         var activeSessionGroups = await _context.UserSessions
             .AsNoTracking()
-            .Where(x => x.Status == SessionStatus.Active)
+            .Where(x => x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened)
             .GroupBy(x => x.BranchId)
             .Select(x => new CountByBranchRow { BranchId = x.Key, Count = x.Count() })
             .ToListAsync(cancellationToken);
@@ -101,7 +105,7 @@ public class AdminDashboardService : IAdminDashboardService
         var onlineTerminals = onlineTerminalGroups.Sum(x => x.Online);
         var staleOrOfflineTerminals = Math.Max(0, activeTerminals - onlineTerminals);
         var activeSessions = activeSessionGroups.Sum(x => x.Count);
-        var interruptedSessions = await _context.UserSessions.AsNoTracking().CountAsync(x => x.Status == SessionStatus.Interrupted, cancellationToken);
+        var abandonedSessions = await _context.UserSessions.AsNoTracking().CountAsync(x => x.Status == SessionStatus.Abandoned, cancellationToken);
         var todayCompletedOrders = todayOrderGroups.Sum(x => x.Completed);
         var todayCancelledOrders = todayOrderGroups.Sum(x => x.Cancelled);
         var todaySales = todayOrderGroups.Sum(x => x.Sales);
@@ -130,7 +134,7 @@ public class AdminDashboardService : IAdminDashboardService
                 new() { Title = "Online terminals", Value = onlineTerminals.ToString(), Hint = $"{activeTerminals} active terminals", Badge = onlineTerminals == activeTerminals ? "Healthy" : "Warning" },
                 new() { Title = "Offline/stale terminals", Value = staleOrOfflineTerminals.ToString(), Hint = "Need terminal check-in", Badge = staleOrOfflineTerminals == 0 ? "Healthy" : "Critical" },
                 new() { Title = "Active branches", Value = activeBranches.ToString(), Hint = $"{branchRows.Count} total branches", Badge = "Info" },
-                new() { Title = "Active sessions", Value = activeSessions.ToString(), Hint = $"{interruptedSessions} interrupted", Badge = interruptedSessions == 0 ? "Healthy" : "Warning" },
+                new() { Title = "Active sessions", Value = activeSessions.ToString(), Hint = $"{abandonedSessions} abandoned", Badge = abandonedSessions == 0 ? "Healthy" : "Warning" },
                 new() { Title = "Today's orders", Value = todayCompletedOrders.ToString(), Hint = $"{todayCancelledOrders} cancelled", Badge = "Info" },
                 new() { Title = "Today's sales", Value = todaySales.ToString("C"), Hint = "Completed orders only", Badge = "Healthy" },
                 new() { Title = "Low stock items", Value = lowStockCount.ToString(), Hint = "At or below minimum", Badge = lowStockCount == 0 ? "Healthy" : "Critical" },
@@ -141,7 +145,7 @@ public class AdminDashboardService : IAdminDashboardService
         model.Alerts = await BuildAlertsAsync(
             staleOrOfflineTerminals,
             terminalHealth,
-            interruptedSessions,
+            abandonedSessions,
             oldSessionCutoff,
             inventoryRisks,
             securitySummary,
@@ -194,6 +198,7 @@ public class AdminDashboardService : IAdminDashboardService
     {
         var terminals = await _context.Terminals
             .AsNoTracking()
+            .Where(x => x.TerminalCode != AdminTerminalCode)
             .Select(x => new TerminalHealthViewModel
             {
                 TerminalCode = x.TerminalCode,
@@ -335,7 +340,36 @@ public class AdminDashboardService : IAdminDashboardService
         return new SecuritySummaryViewModel
         {
             HasAuditLogs = hasAuditLogs,
-            FailedLoginsToday = 0,
+            FailedLoginsToday = await _context.AuditLogs
+                .AsNoTracking()
+                .CountAsync(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "LoginFailed", cancellationToken),
+            LockedAccounts = await _context.Users
+                .AsNoTracking()
+                .CountAsync(x => x.LockoutEnd != null && x.LockoutEnd > DateTimeOffset.UtcNow, cancellationToken),
+            RateLimitHitsToday = await _context.AuditLogs
+                .AsNoTracking()
+                .CountAsync(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "RateLimitHit", cancellationToken),
+            SuspiciousIpsToday = await _context.AuditLogs
+                .AsNoTracking()
+                .Where(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "LoginFailed" && x.IpAddress != null)
+                .GroupBy(x => x.IpAddress)
+                .CountAsync(x => x.Count() >= 5, cancellationToken),
+            RepeatedLoginFailuresByUsername = await _context.AuditLogs
+                .AsNoTracking()
+                .Where(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "LoginFailed" && x.AttemptedUserName != null)
+                .GroupBy(x => x.AttemptedUserName)
+                .CountAsync(x => x.Count() >= 5, cancellationToken),
+            RepeatedLoginFailuresByIp = await _context.AuditLogs
+                .AsNoTracking()
+                .Where(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "LoginFailed" && x.IpAddress != null)
+                .GroupBy(x => x.IpAddress)
+                .CountAsync(x => x.Count() >= 5, cancellationToken),
+            TerminalHeartbeatSpamCount = await _context.AuditLogs
+                .AsNoTracking()
+                .CountAsync(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "RateLimitHit" && x.Message != null && x.Message.Contains("TerminalHeartbeatPolicy"), cancellationToken),
+            BlockedReportSpamCount = await _context.AuditLogs
+                .AsNoTracking()
+                .CountAsync(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && x.EventType == "RateLimitHit" && x.Message != null && x.Message.Contains("ReportsPolicy"), cancellationToken),
             UnauthorizedAccessToday = 0,
             AdminChangesToday = await _context.AuditLogs
                 .AsNoTracking()
@@ -350,7 +384,7 @@ public class AdminDashboardService : IAdminDashboardService
     private async Task<List<DashboardAlertViewModel>> BuildAlertsAsync(
         int staleOrOfflineTerminals,
         List<TerminalHealthViewModel> terminals,
-        int interruptedSessions,
+        int abandonedSessions,
         DateTime oldSessionCutoff,
         List<InventoryRiskViewModel> inventoryRisks,
         SecuritySummaryViewModel security,
@@ -381,19 +415,19 @@ public class AdminDashboardService : IAdminDashboardService
             });
         }
 
-        if (interruptedSessions > 0)
+        if (abandonedSessions > 0)
         {
             alerts.Add(new DashboardAlertViewModel
             {
                 Severity = "Warning",
-                Title = "Interrupted sessions",
-                Detail = $"{interruptedSessions} session(s) need review or continuation."
+                Title = "Abandoned sessions",
+                Detail = $"{abandonedSessions} session(s) need review or continuation."
             });
         }
 
         var oldActiveSessions = await _context.UserSessions
             .AsNoTracking()
-            .CountAsync(x => x.Status == SessionStatus.Active && x.StartedAt < oldSessionCutoff, cancellationToken);
+            .CountAsync(x => (x.Status == SessionStatus.Active || x.Status == SessionStatus.Reopened) && x.StartedAt < oldSessionCutoff, cancellationToken);
         if (oldActiveSessions > 0)
         {
             alerts.Add(new DashboardAlertViewModel

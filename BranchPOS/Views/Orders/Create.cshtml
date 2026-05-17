@@ -113,6 +113,7 @@ let activeOrderId = null;
 let selectedCategoryId = 'all';
 let searchTerm = '';
 let autosaveTimer = null;
+let searchDebounceTimer = null;
 
 function newLocalId() {
     if (window.crypto?.randomUUID) {
@@ -126,6 +127,7 @@ function makeOrder(seed) {
     const id = seed?.Id ? `db-${seed.Id}` : `local-${newLocalId()}`;
     return {
         id,
+        idempotencyKey: seed?.IdempotencyKey ?? newLocalId(),
         draftOrderId: seed?.Id ?? null,
         label: seed?.OrderNumber ?? `Order ${orders.length + 1}`,
         orderType: seed?.OrderType ?? 'Takeaway',
@@ -330,6 +332,7 @@ function buildPayload() {
     const order = activeOrder();
     return {
         draftOrderId: order.draftOrderId,
+        idempotencyKey: order.idempotencyKey,
         orderType: order.orderType,
         discountAmount: order.discountAmount,
         tableNumber: order.tableNumber,
@@ -406,8 +409,11 @@ document.querySelectorAll('.category-filter').forEach(button => {
 });
 
 document.getElementById('productSearch').addEventListener('input', event => {
-    searchTerm = event.target.value.toLowerCase().trim();
-    renderProducts();
+    window.clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = window.setTimeout(() => {
+        searchTerm = event.target.value.toLowerCase().trim();
+        renderProducts();
+    }, 350);
 });
 
 document.getElementById('customerPhone').addEventListener('blur', async event => {
@@ -457,10 +463,15 @@ document.getElementById('cancelOrderBtn').addEventListener('click', async () => 
 });
 
 document.getElementById('finalizeOrderBtn').addEventListener('click', async () => {
+    const button = document.getElementById('finalizeOrderBtn');
     try {
+        button.disabled = true;
+        button.textContent = 'Processing...';
         const data = await postJson('/Orders/Finalize', buildPayload());
         window.location.href = data.receiptUrl;
     } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Finalize sale';
         showMessage(error.message);
     }
 });

@@ -5,10 +5,17 @@
 
 <h1>New purchase</h1>
 <form method="post">
+    <input type="hidden" asp-for="IdempotencyKey" />
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-    <div class="mb-3 col-md-4">
-        <label asp-for="SupplierId" class="form-label"></label>
-        <select asp-for="SupplierId" asp-items="Model.Suppliers" class="form-select"></select>
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <label asp-for="SupplierId" class="form-label"></label>
+            <select asp-for="SupplierId" asp-items="Model.Suppliers" class="form-select"></select>
+        </div>
+        <div class="col-md-4">
+            <label asp-for="InvoiceNumber" class="form-label">Invoice number</label>
+            <input asp-for="InvoiceNumber" class="form-control" />
+        </div>
     </div>
     <table class="table">
         <thead><tr><th>Ingredient</th><th>Quantity</th><th>Unit cost</th></tr></thead>
@@ -23,6 +30,18 @@
         }
         </tbody>
     </table>
-    <button type="submit" class="btn btn-primary">Save purchase</button>
+    <button type="submit" class="btn btn-primary" id="savePurchaseButton">Save purchase</button>
     <a class="btn btn-secondary" asp-action="Index">Cancel</a>
 </form>
+
+@section Scripts {
+    <script>
+        document.querySelector('form')?.addEventListener('submit', () => {
+            const button = document.getElementById('savePurchaseButton');
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Processing...';
+            }
+        });
+    </script>
+}

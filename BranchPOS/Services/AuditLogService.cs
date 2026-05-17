@@ -11,11 +11,13 @@ public class AuditLogService : IAuditLogService
 
     private readonly AppDbContext _context;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IRequestIdentityService _requestIdentity;
 
-    public AuditLogService(AppDbContext context, IHttpContextAccessor httpContextAccessor)
+    public AuditLogService(AppDbContext context, IHttpContextAccessor httpContextAccessor, IRequestIdentityService requestIdentity)
     {
         _context = context;
         _httpContextAccessor = httpContextAccessor;
+        _requestIdentity = requestIdentity;
     }
 
     public async Task LogAsync(
@@ -35,6 +37,8 @@ public class AuditLogService : IAuditLogService
         _context.AuditLogs.Add(new AuditLog
         {
             Action = action,
+            EventType = action,
+            Severity = "Info",
             EntityName = entityName,
             EntityId = entityId,
             OldValues = oldValues is null ? null : JsonSerializer.Serialize(oldValues, SerializerOptions),
@@ -44,6 +48,36 @@ public class AuditLogService : IAuditLogService
             UserId = userId,
             IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
             UserAgent = httpContext?.Request.Headers.UserAgent.ToString()
+        });
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task LogSecurityAsync(
+        string eventType,
+        string severity,
+        string message,
+        string? userId = null,
+        string? attemptedUserName = null,
+        int? branchId = null,
+        int? terminalId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = await _requestIdentity.GetSnapshotAsync(cancellationToken);
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Action = eventType,
+            EventType = eventType,
+            Severity = severity,
+            Message = message,
+            EntityName = "Security",
+            EntityId = attemptedUserName,
+            BranchId = branchId ?? snapshot.BranchId,
+            TerminalId = terminalId ?? snapshot.TerminalId,
+            UserId = userId ?? snapshot.UserId,
+            AttemptedUserName = attemptedUserName,
+            IpAddress = snapshot.ClientIp,
+            UserAgent = snapshot.UserAgent
         });
 
         await _context.SaveChangesAsync(cancellationToken);
