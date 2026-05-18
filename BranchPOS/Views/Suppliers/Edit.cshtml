@@ -1,0 +1,16 @@
+@model BranchPOS.Models.Supplier
+@{
+    ViewData["Title"] = "Edit supplier";
+}
+
+<h1>Edit supplier</h1>
+<form method="post" class="col-md-5">
+    <input type="hidden" asp-for="Id" />
+    <partial name="_SupplierForm" model="Model" />
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
