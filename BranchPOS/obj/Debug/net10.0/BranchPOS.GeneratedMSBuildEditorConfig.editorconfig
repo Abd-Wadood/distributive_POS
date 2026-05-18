@@ -162,6 +162,22 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Suppliers/Create.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3VwcGxpZXJzXENyZWF0ZS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Suppliers/Edit.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3VwcGxpZXJzXEVkaXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Suppliers/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3VwcGxpZXJzXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Suppliers/_SupplierForm.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3VwcGxpZXJzXF9TdXBwbGllckZvcm0uY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/TerminalSetup/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVGVybWluYWxTZXR1cFxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
