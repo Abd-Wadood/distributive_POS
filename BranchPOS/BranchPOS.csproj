@@ -15,4 +15,13 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
   </ItemGroup>
 
+  <Target Name="CleanCorruptStaticWebAssetCaches" BeforeTargets="DefineStaticWebAssets">
+    <ItemGroup>
+      <StaticWebAssetCacheFiles Include="$(IntermediateOutputPath)*.dswa.cache.json" />
+    </ItemGroup>
+    <!-- Generated static-web-assets cache files can be left corrupt after an interrupted build.
+         Removing them is safe; the SDK regenerates them during build/publish. -->
+    <Delete Files="@(StaticWebAssetCacheFiles)" TreatErrorsAsWarnings="true" />
+  </Target>
+
 </Project>

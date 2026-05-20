@@ -106,6 +106,7 @@ public class AdminDashboardService : IAdminDashboardService
         var staleOrOfflineTerminals = Math.Max(0, activeTerminals - onlineTerminals);
         var activeSessions = activeSessionGroups.Sum(x => x.Count);
         var abandonedSessions = await _context.UserSessions.AsNoTracking().CountAsync(x => x.Status == SessionStatus.Abandoned, cancellationToken);
+        var pendingCloseApprovals = await _context.UserSessions.AsNoTracking().CountAsync(x => x.Status == SessionStatus.ClosingPending && x.RequiresManagerApproval, cancellationToken);
         var todayCompletedOrders = todayOrderGroups.Sum(x => x.Completed);
         var todayCancelledOrders = todayOrderGroups.Sum(x => x.Cancelled);
         var todaySales = todayOrderGroups.Sum(x => x.Sales);
@@ -146,6 +147,7 @@ public class AdminDashboardService : IAdminDashboardService
             staleOrOfflineTerminals,
             terminalHealth,
             abandonedSessions,
+            pendingCloseApprovals,
             oldSessionCutoff,
             inventoryRisks,
             securitySummary,
@@ -385,6 +387,7 @@ public class AdminDashboardService : IAdminDashboardService
         int staleOrOfflineTerminals,
         List<TerminalHealthViewModel> terminals,
         int abandonedSessions,
+        int pendingCloseApprovals,
         DateTime oldSessionCutoff,
         List<InventoryRiskViewModel> inventoryRisks,
         SecuritySummaryViewModel security,
@@ -422,6 +425,17 @@ public class AdminDashboardService : IAdminDashboardService
                 Severity = "Warning",
                 Title = "Abandoned sessions",
                 Detail = $"{abandonedSessions} session(s) need review or continuation."
+            });
+        }
+
+        if (pendingCloseApprovals > 0)
+        {
+            alerts.Add(new DashboardAlertViewModel
+            {
+                Severity = "Warning",
+                Title = "Session close approvals pending",
+                Detail = $"{pendingCloseApprovals} close request(s) need admin approval.",
+                ActionUrl = "/Sessions/PendingCloseApprovals"
             });
         }
 

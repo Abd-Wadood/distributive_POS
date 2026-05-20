@@ -8,7 +8,11 @@ public interface ITerminalContextService
 
     Task<Terminal?> GetCurrentTerminalAsync(CancellationToken cancellationToken = default);
 
+    Task<Terminal?> GetCurrentTerminalFreshAsync(CancellationToken cancellationToken = default);
+
     Task<Terminal> RequireCurrentTerminalAsync(CancellationToken cancellationToken = default);
+
+    Task<Terminal> RequireCurrentTerminalFreshAsync(CancellationToken cancellationToken = default);
 
     Task IssueTerminalCookieAsync(Terminal terminal, string? rawToken = null, CancellationToken cancellationToken = default);
 

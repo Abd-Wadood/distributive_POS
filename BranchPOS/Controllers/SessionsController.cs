@@ -65,7 +65,7 @@ public class SessionsController : Controller
 
         try
         {
-            var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
+            var terminal = await _terminalContextService.RequireCurrentTerminalFreshAsync();
             var role = User.IsInRole("Cashier") ? "Cashier" : "StockManager";
             var session = await _userSessionService.StartSessionAsync(new StartSessionDto
             {
@@ -143,12 +143,49 @@ public class SessionsController : Controller
         }
     }
 
+    [HttpGet, Authorize(Roles = "Admin")]
+    public async Task<IActionResult> PendingCloseApprovals(CancellationToken cancellationToken)
+    {
+        var approvals = await _userSessionService.GetPendingCloseApprovalsAsync(cancellationToken);
+        return View(approvals);
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ApproveClose(int sessionId, string idempotencyKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var terminal = await _terminalContextService.RequireCurrentTerminalFreshAsync(cancellationToken);
+            var session = await _userSessionService.ApprovePendingCloseAsync(
+                sessionId,
+                GetUserId(),
+                terminal.Id,
+                terminal.TerminalCode,
+                idempotencyKey,
+                cancellationToken);
+
+            TempData["Success"] = $"Session {session.SessionCode} closed.";
+            return RedirectToAction(nameof(PendingCloseApprovals));
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ToUserMessage(ex);
+            return RedirectToAction(nameof(PendingCloseApprovals));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _errorLoggingService.LogException(HttpContext, ex, "You do not have permission to approve this close request.");
+            TempData["Error"] = "You do not have permission to approve this close request.";
+            return RedirectToAction(nameof(PendingCloseApprovals));
+        }
+    }
+
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier,StockManager,Admin")]
     public async Task<IActionResult> Close(SessionCloseViewModel model, bool forceClose = false)
     {
         try
         {
-            var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
+            var terminal = await _terminalContextService.RequireCurrentTerminalFreshAsync();
             var session = await _userSessionService.CloseSessionAsync(new CloseSessionDto
             {
                 SessionId = model.Session.Id,
@@ -190,7 +227,7 @@ public class SessionsController : Controller
     {
         try
         {
-            var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
+            var terminal = await _terminalContextService.RequireCurrentTerminalFreshAsync();
             var session = await _userSessionService.ReopenSessionAsync(new ReopenSessionDto
             {
                 SessionId = sessionId,

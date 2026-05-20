@@ -145,7 +145,9 @@ builder.Services.AddScoped<IRequestIdentityService, RequestIdentityService>();
 builder.Services.AddScoped<ILoginSecurityService, LoginSecurityService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IIdempotencyService, IdempotencyService>();
+builder.Services.AddSingleton<IPosMenuCacheInvalidator, PosMenuCacheInvalidator>();
 builder.Services.AddHostedService<IdempotencyCleanupService>();
+builder.Services.AddHostedService<AuditLogCleanupService>();
 
 var app = builder.Build();
 

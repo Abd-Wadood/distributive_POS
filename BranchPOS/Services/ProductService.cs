@@ -8,11 +8,13 @@ public class ProductService : IProductService
 {
     private readonly AppDbContext _context;
     private readonly IBranchContextService _branchContextService;
+    private readonly IPosMenuCacheInvalidator _posMenuCacheInvalidator;
 
-    public ProductService(AppDbContext context, IBranchContextService branchContextService)
+    public ProductService(AppDbContext context, IBranchContextService branchContextService, IPosMenuCacheInvalidator posMenuCacheInvalidator)
     {
         _context = context;
         _branchContextService = branchContextService;
+        _posMenuCacheInvalidator = posMenuCacheInvalidator;
     }
 
     public async Task<List<Product>> GetProductsAsync(CancellationToken cancellationToken = default)
@@ -50,6 +52,7 @@ public class ProductService : IProductService
 
         _context.Products.Add(product);
         await _context.SaveChangesAsync(cancellationToken);
+        _posMenuCacheInvalidator.Invalidate();
     }
 
     public async Task UpdateProductAsync(Product product, Dictionary<int, decimal> ingredientQuantities, CancellationToken cancellationToken = default)
@@ -79,5 +82,6 @@ public class ProductService : IProductService
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+        _posMenuCacheInvalidator.Invalidate();
     }
 }

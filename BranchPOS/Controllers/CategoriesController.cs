@@ -1,5 +1,6 @@
 using BranchPOS.Data;
 using BranchPOS.Models;
+using BranchPOS.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,10 +11,12 @@ namespace BranchPOS.Controllers;
 public class CategoriesController : Controller
 {
     private readonly AppDbContext _context;
+    private readonly IPosMenuCacheInvalidator _posMenuCacheInvalidator;
 
-    public CategoriesController(AppDbContext context)
+    public CategoriesController(AppDbContext context, IPosMenuCacheInvalidator posMenuCacheInvalidator)
     {
         _context = context;
+        _posMenuCacheInvalidator = posMenuCacheInvalidator;
     }
 
     public async Task<IActionResult> Index()
@@ -44,6 +47,7 @@ public class CategoriesController : Controller
 
         _context.Categories.Add(category);
         await _context.SaveChangesAsync();
+        _posMenuCacheInvalidator.Invalidate();
         return RedirectToAction(nameof(Index));
     }
 
@@ -81,6 +85,7 @@ public class CategoriesController : Controller
 
         existing.Name = name;
         await _context.SaveChangesAsync();
+        _posMenuCacheInvalidator.Invalidate();
         return RedirectToAction(nameof(Index));
     }
 
@@ -102,6 +107,7 @@ public class CategoriesController : Controller
 
         _context.Categories.Remove(category);
         await _context.SaveChangesAsync();
+        _posMenuCacheInvalidator.Invalidate();
         TempData["Message"] = "Category deleted.";
         return RedirectToAction(nameof(Index));
     }

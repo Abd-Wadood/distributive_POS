@@ -40,7 +40,7 @@ public class CustomerDto
 {
     public int BranchId { get; set; }
 
-    [Phone]
+    [RegularExpression(@"^\d{11}$", ErrorMessage = "Customer phone number must be exactly 11 digits.")]
     public string? PhoneNumber { get; set; }
 
     public string? Name { get; set; }

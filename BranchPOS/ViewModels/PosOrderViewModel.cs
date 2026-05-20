@@ -24,6 +24,10 @@ public class PosProductViewModel
     public string CategoryName { get; set; } = string.Empty;
 
     public bool IsAvailable { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public string? ImagePath { get; set; }
 }
 
 public class PosDraftOrderViewModel

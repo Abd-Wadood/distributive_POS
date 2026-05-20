@@ -4,6 +4,7 @@ using BranchPOS.Exceptions;
 using BranchPOS.Models;
 using BranchPOS.ViewModels;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -18,8 +19,10 @@ public class UserSessionService : IUserSessionService
     private readonly IAuditLogService _auditLogService;
     private readonly IIdempotencyService _idempotencyService;
     private readonly PosOperationalOptions _options;
+    private readonly IMemoryCache _cache;
     private static readonly SessionStatus[] OperationalStatuses = [SessionStatus.Active, SessionStatus.Reopened];
     private static readonly SessionStatus[] BlockingStatuses = [SessionStatus.Active, SessionStatus.Reopened, SessionStatus.ClosingPending];
+    private static readonly TimeSpan ActiveSessionCacheTtl = TimeSpan.FromSeconds(45);
 
     public UserSessionService(
         AppDbContext context,
@@ -28,7 +31,8 @@ public class UserSessionService : IUserSessionService
         ISessionCodeGeneratorService sessionCodeGenerator,
         IAuditLogService auditLogService,
         IIdempotencyService idempotencyService,
-        IOptions<PosOperationalOptions> options)
+        IOptions<PosOperationalOptions> options,
+        IMemoryCache cache)
     {
         _context = context;
         _branchService = branchService;
@@ -37,6 +41,7 @@ public class UserSessionService : IUserSessionService
         _auditLogService = auditLogService;
         _idempotencyService = idempotencyService;
         _options = options.Value;
+        _cache = cache;
     }
 
     public async Task<UserSession> StartSessionAsync(StartSessionDto dto, CancellationToken cancellationToken = default)
@@ -78,6 +83,7 @@ public class UserSessionService : IUserSessionService
                 var existing = await _context.UserSessions.Include(x => x.Branch).FirstOrDefaultAsync(x => x.Id == idempotency.Record.ResourceId.Value, cancellationToken)
                     ?? throw new PosNotFoundException("The previous session result was not found. Refresh and try again.");
                 await transaction.CommitAsync(cancellationToken);
+                InvalidateActiveSessionCache(existing.UserId, existing.TerminalId, existing.BranchId);
                 return existing;
             }
 
@@ -94,6 +100,7 @@ public class UserSessionService : IUserSessionService
                 existingUserSession.BranchId, existingUserSession.TerminalId, dto.UserId, cancellationToken);
             await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), existingUserSession.Id, StatusCodes.Status200OK, existingUserSession.SessionCode, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            InvalidateActiveSessionCache(existingUserSession.UserId, existingUserSession.TerminalId, existingUserSession.BranchId);
             return existingUserSession;
         }
 
@@ -140,15 +147,50 @@ public class UserSessionService : IUserSessionService
         await _auditLogService.LogAsync("SessionStarted", nameof(UserSession), session.Id.ToString(), null,
             new { session.SessionCode, session.BranchId, session.TerminalId, session.TerminalCode, session.RoleName, session.OpeningCashAmount },
             session.BranchId, session.TerminalId, session.UserId, cancellationToken);
+        InvalidateActiveSessionCache(session.UserId, session.TerminalId, session.BranchId);
         return session;
     }
 
-    public Task<UserSession?> GetActiveSessionAsync(string userId, CancellationToken cancellationToken = default) =>
-        _context.UserSessions
+    public async Task<UserSession?> GetActiveSessionAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var terminal = await _terminalContextService.GetCurrentTerminalAsync(cancellationToken);
+        var cacheKey = GetActiveSessionCacheKey(userId, terminal?.Id, terminal?.BranchId);
+        if (_cache.TryGetValue(cacheKey, out UserSession? cached))
+        {
+            return cached is null ? null : CloneSession(cached);
+        }
+
+        var session = await GetActiveSessionFromDatabaseAsync(userId, terminal?.Id, terminal?.BranchId, cancellationToken);
+        if (session is not null)
+        {
+            _cache.Set(cacheKey, CloneSession(session), ActiveSessionCacheTtl);
+        }
+
+        return session;
+    }
+
+    public Task<UserSession?> GetActiveSessionFreshAsync(string userId, CancellationToken cancellationToken = default) =>
+        GetActiveSessionFromDatabaseAsync(userId, null, null, cancellationToken);
+
+    private Task<UserSession?> GetActiveSessionFromDatabaseAsync(string userId, int? terminalId, int? branchId, CancellationToken cancellationToken)
+    {
+        var query = _context.UserSessions
             .Include(x => x.Branch)
             .Where(x => x.UserId == userId && BlockingStatuses.Contains(x.Status))
-            .OrderByDescending(x => x.StartedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            .AsQueryable();
+
+        if (terminalId.HasValue)
+        {
+            query = query.Where(x => x.TerminalId == terminalId.Value);
+        }
+
+        if (branchId.HasValue)
+        {
+            query = query.Where(x => x.BranchId == branchId.Value);
+        }
+
+        return query.OrderByDescending(x => x.StartedAt).FirstOrDefaultAsync(cancellationToken);
+    }
 
     public Task<UserSession?> GetAbandonedSessionAsync(string userId, CancellationToken cancellationToken = default) =>
         _context.UserSessions
@@ -213,6 +255,7 @@ public class UserSessionService : IUserSessionService
         await _auditLogService.LogAsync("SessionContinued", nameof(UserSession), session.Id.ToString(), oldValues,
             new { session.Status, session.TerminalId, session.TerminalCode, session.TerminalName },
             session.BranchId, session.TerminalId, session.UserId, cancellationToken);
+        InvalidateActiveSessionCache(session.UserId, session.TerminalId, session.BranchId);
         return session;
     }
 
@@ -220,6 +263,62 @@ public class UserSessionService : IUserSessionService
     {
         var session = await GetClosableSessionAsync(sessionId, userId, isManagerOrAdmin, cancellationToken);
         return await BuildCloseViewModelAsync(session, cancellationToken);
+    }
+
+    public async Task<List<PendingSessionCloseApprovalViewModel>> GetPendingCloseApprovalsAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.UserSessions
+            .AsNoTracking()
+            .Where(x => x.Status == SessionStatus.ClosingPending && x.RequiresManagerApproval)
+            .OrderBy(x => x.ClosingRequestedAt ?? x.StartedAt)
+            .Select(x => new PendingSessionCloseApprovalViewModel
+            {
+                SessionId = x.Id,
+                SessionCode = x.SessionCode,
+                Cashier = x.User == null ? x.UserId : x.User.Email ?? x.UserId,
+                BranchName = x.Branch == null ? "" : x.Branch.Name,
+                TerminalName = x.TerminalName,
+                TerminalCode = x.TerminalCode,
+                StartedAt = x.StartedAt,
+                RequestedAt = x.ClosingRequestedAt,
+                OpeningCash = x.OpeningCashAmount,
+                ExpectedClosingCash = x.ExpectedClosingCash ?? x.OpeningCashAmount + _context.Orders
+                    .Where(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed)
+                    .Sum(o => o.TotalAmount),
+                CountedClosingCash = x.CountedClosingCash ?? 0,
+                CompletedOrdersCount = _context.Orders.Count(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed),
+                TotalSalesAmount = _context.Orders
+                    .Where(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed)
+                    .Sum(o => o.TotalAmount),
+                IdempotencyKey = Guid.NewGuid().ToString("N")
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<UserSession> ApprovePendingCloseAsync(int sessionId, string approvedByUserId, int terminalId, string terminalCode, string idempotencyKey, CancellationToken cancellationToken = default)
+    {
+        var pending = await _context.UserSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == sessionId && x.Status == SessionStatus.ClosingPending && x.RequiresManagerApproval, cancellationToken)
+            ?? throw new PosNotFoundException("Pending session close request was not found. Refresh and try again.");
+
+        if (!pending.CountedClosingCash.HasValue)
+        {
+            throw new BusinessException("This close request has no counted cash amount. Open the session close screen and enter the counted cash.");
+        }
+
+        return await CloseSessionAsync(new CloseSessionDto
+        {
+            SessionId = pending.Id,
+            IdempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? _idempotencyService.GetOrCreateKey() : idempotencyKey,
+            UserId = approvedByUserId,
+            TerminalId = terminalId,
+            TerminalCode = terminalCode,
+            CountedClosingCash = pending.CountedClosingCash.Value,
+            ConfirmationText = "END",
+            IsManagerOrAdmin = true,
+            ForceClose = false
+        }, cancellationToken);
     }
 
     public async Task<UserSession> CloseSessionAsync(CloseSessionDto dto, CancellationToken cancellationToken = default)
@@ -291,6 +390,7 @@ public class UserSessionService : IUserSessionService
                 session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
             await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), session.Id, StatusCodes.Status202Accepted, session.SessionCode, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            InvalidateActiveSessionCache(session.UserId, session.TerminalId, session.BranchId);
             throw new BusinessException($"Manager/admin approval is required before closing this session: {string.Join("; ", approvalReasons)}.");
         }
 
@@ -315,6 +415,7 @@ public class UserSessionService : IUserSessionService
             session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
         await _idempotencyService.CompleteAsync(idempotency.Record, nameof(UserSession), session.Id, StatusCodes.Status200OK, session.SessionCode, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        InvalidateActiveSessionCache(session.UserId, session.TerminalId, session.BranchId);
         return session;
     }
 
@@ -375,6 +476,7 @@ public class UserSessionService : IUserSessionService
             new { session.Status, session.ReopenedAt, session.ReopenReason },
             session.BranchId, session.TerminalId, dto.UserId, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        InvalidateActiveSessionCache(session.UserId, session.TerminalId, session.BranchId);
         return session;
     }
 
@@ -390,6 +492,7 @@ public class UserSessionService : IUserSessionService
         {
             var oldStatus = session.Status;
             session.Status = SessionStatus.Abandoned;
+            InvalidateActiveSessionCache(session.UserId, session.TerminalId, session.BranchId);
             await _auditLogService.LogAsync("SessionAbandoned", nameof(UserSession), session.Id.ToString(),
                 new { Status = oldStatus },
                 new { Status = SessionStatus.Abandoned },
@@ -557,4 +660,55 @@ public class UserSessionService : IUserSessionService
 
     private static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
+
+    private static string GetActiveSessionCacheKey(string userId, int? terminalId, int? branchId) =>
+        $"active-session:v1:user:{userId}:terminal:{terminalId?.ToString() ?? "none"}:branch:{branchId?.ToString() ?? "none"}";
+
+    private void InvalidateActiveSessionCache(string userId, int terminalId, int branchId)
+    {
+        _cache.Remove(GetActiveSessionCacheKey(userId, terminalId, branchId));
+        _cache.Remove(GetActiveSessionCacheKey(userId, null, null));
+    }
+
+    private static UserSession CloneSession(UserSession session) =>
+        new()
+        {
+            Id = session.Id,
+            PublicId = session.PublicId,
+            IdempotencyKey = session.IdempotencyKey,
+            CloseIdempotencyKey = session.CloseIdempotencyKey,
+            SessionCode = session.SessionCode,
+            UserId = session.UserId,
+            BranchId = session.BranchId,
+            Branch = session.Branch is null
+                ? null
+                : new Branch
+                {
+                    Id = session.Branch.Id,
+                    Name = session.Branch.Name,
+                    BranchCode = session.Branch.BranchCode,
+                    IsActive = session.Branch.IsActive
+                },
+            RoleName = session.RoleName,
+            TerminalName = session.TerminalName,
+            TerminalId = session.TerminalId,
+            TerminalCode = session.TerminalCode,
+            StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt,
+            Status = session.Status,
+            OpeningCashAmount = session.OpeningCashAmount,
+            CountedClosingCash = session.CountedClosingCash,
+            ExpectedClosingCash = session.ExpectedClosingCash,
+            CashDifference = session.CashDifference,
+            RequiresManagerApproval = session.RequiresManagerApproval,
+            ClosingRequestedAt = session.ClosingRequestedAt,
+            ClosedByUserId = session.ClosedByUserId,
+            ReopenedByUserId = session.ReopenedByUserId,
+            ReopenedAt = session.ReopenedAt,
+            ReopenReason = session.ReopenReason,
+            Notes = session.Notes,
+            CreatedAt = session.CreatedAt,
+            IsSynced = session.IsSynced,
+            SyncedAt = session.SyncedAt
+        };
 }

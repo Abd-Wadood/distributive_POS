@@ -1,0 +1,77 @@
+@model List<BranchPOS.ViewModels.PendingSessionCloseApprovalViewModel>
+@{
+    ViewData["Title"] = "Pending session close approvals";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="mb-0">Pending session close approvals</h1>
+        <div class="text-muted">Approve cashier close requests that required manager/admin permission.</div>
+    </div>
+    <a class="btn btn-outline-secondary" asp-controller="Home" asp-action="Index">Dashboard</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">No pending session close approvals.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Session</th>
+                    <th>Cashier</th>
+                    <th>Branch</th>
+                    <th>Terminal</th>
+                    <th>Requested</th>
+                    <th>Expected</th>
+                    <th>Counted</th>
+                    <th>Difference</th>
+                    <th>Orders</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var approval in Model)
+                {
+                    <tr>
+                        <td>
+                            <strong>@approval.SessionCode</strong>
+                            <div class="small text-muted">Started @approval.StartedAt.ToLocalTime()</div>
+                        </td>
+                        <td>@approval.Cashier</td>
+                        <td>@approval.BranchName</td>
+                        <td>
+                            @approval.TerminalName
+                            <div class="small text-muted">@approval.TerminalCode</div>
+                        </td>
+                        <td>@approval.RequestedAt?.ToLocalTime()</td>
+                        <td>@approval.ExpectedClosingCash.ToString("0.00")</td>
+                        <td>@approval.CountedClosingCash.ToString("0.00")</td>
+                        <td>
+                            <span class="badge @(approval.Difference == 0 ? "text-bg-success" : "text-bg-warning")">
+                                @approval.Difference.ToString("0.00")
+                            </span>
+                        </td>
+                        <td>
+                            @approval.CompletedOrdersCount
+                            <div class="small text-muted">@approval.TotalSalesAmount.ToString("0.00") sales</div>
+                        </td>
+                        <td class="text-end">
+                            <div class="d-flex justify-content-end gap-2">
+                                <a class="btn btn-sm btn-outline-secondary" asp-action="Close" asp-route-sessionId="@approval.SessionId">Review</a>
+                                <form asp-action="ApproveClose" method="post">
+                                    <input type="hidden" name="sessionId" value="@approval.SessionId" />
+                                    <input type="hidden" name="idempotencyKey" value="@approval.IdempotencyKey" />
+                                    <button class="btn btn-sm btn-primary" type="submit">Approve close</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

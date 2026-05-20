@@ -4,8 +4,6 @@
 }
 
 <h1>Inventory</h1>
-@if (TempData["Message"] is not null) { <div class="alert alert-success">@TempData["Message"]</div> }
-@if (TempData["Error"] is not null) { <div class="alert alert-danger">@TempData["Error"]</div> }
 
 <table class="table table-striped">
     <thead><tr><th>Ingredient</th><th>Current quantity</th><th>Minimum</th><th>Adjustment</th></tr></thead>

@@ -8,6 +8,13 @@
 
 <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
+@if (Model.Session.Status == BranchPOS.Models.SessionStatus.ClosingPending)
+{
+    <div class="alert alert-warning">
+        This close request is waiting for manager/admin approval.
+    </div>
+}
+
 <div class="card mb-3">
     <div class="card-body">
         <div class="row g-3">

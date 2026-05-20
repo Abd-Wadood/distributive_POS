@@ -457,6 +457,11 @@ public class OrderService : IOrderService
 
     private static void ValidateCustomerRules(OrderType orderType, CustomerDto customer, bool allowEmptyCart = false)
     {
+        if (!string.IsNullOrWhiteSpace(customer.PhoneNumber) && !IsElevenDigitPhone(customer.PhoneNumber))
+        {
+            throw new PosValidationException("Customer phone number must be exactly 11 digits.");
+        }
+
         if (orderType == OrderType.Delivery)
         {
             if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
@@ -471,6 +476,9 @@ public class OrderService : IOrderService
         }
     }
 
+    private static bool IsElevenDigitPhone(string phone) =>
+        phone.Trim().Length == 11 && phone.Trim().All(char.IsDigit);
+
     private Task<string> GenerateOrderNumberAsync(int branchId, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
@@ -480,7 +488,8 @@ public class OrderService : IOrderService
 
     private async Task<UserSession> RequireActiveSessionAsync(string userId, int userSessionId, CancellationToken cancellationToken)
     {
-        var activeSession = await _userSessionService.GetActiveSessionAsync(userId, cancellationToken)
+        // Final order completion must verify session state from the database, not from the short-lived UI cache.
+        var activeSession = await _userSessionService.GetActiveSessionFreshAsync(userId, cancellationToken)
             ?? throw new BusinessException("Start or continue an active cashier session before creating orders.");
 
         if (!string.Equals(activeSession.RoleName, "Cashier", StringComparison.OrdinalIgnoreCase))

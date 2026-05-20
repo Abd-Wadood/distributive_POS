@@ -4,6 +4,7 @@ using BranchPOS.Models;
 using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace BranchPOS.Services;
 
@@ -14,12 +15,14 @@ public class TerminalService : ITerminalService
     private readonly AppDbContext _context;
     private readonly IBranchService _branchService;
     private readonly IAuditLogService _auditLogService;
+    private readonly IMemoryCache _cache;
 
-    public TerminalService(AppDbContext context, IBranchService branchService, IAuditLogService auditLogService)
+    public TerminalService(AppDbContext context, IBranchService branchService, IAuditLogService auditLogService, IMemoryCache cache)
     {
         _context = context;
         _branchService = branchService;
         _auditLogService = auditLogService;
+        _cache = cache;
     }
 
     public async Task<TerminalAdminViewModel> BuildAdminModelAsync(TerminalCreateViewModel createModel, string userId, CancellationToken cancellationToken = default)
@@ -94,6 +97,7 @@ public class TerminalService : ITerminalService
         try
         {
             await _context.SaveChangesAsync(cancellationToken);
+            _cache.Remove(TerminalContextService.GetTerminalCacheKey(terminal.TerminalCode));
         }
         catch (Exception ex) when (DatabaseErrorTranslator.IsUniqueViolation(ex))
         {
@@ -120,6 +124,7 @@ public class TerminalService : ITerminalService
             ?? throw new PosNotFoundException("Terminal was not found. Refresh the page and try again.");
 
         var oldValues = new { terminal.TerminalCode, terminal.BranchId, terminal.Name, terminal.IpAddress, terminal.IsActive };
+        var oldTerminalCode = terminal.TerminalCode;
         terminal.TerminalCode = model.TerminalCode;
         terminal.BranchId = model.BranchId;
         terminal.Name = model.Name.Trim();
@@ -129,6 +134,8 @@ public class TerminalService : ITerminalService
         try
         {
             await _context.SaveChangesAsync(cancellationToken);
+            _cache.Remove(TerminalContextService.GetTerminalCacheKey(oldTerminalCode));
+            _cache.Remove(TerminalContextService.GetTerminalCacheKey(terminal.TerminalCode));
         }
         catch (Exception ex) when (DatabaseErrorTranslator.IsUniqueViolation(ex))
         {
@@ -149,6 +156,7 @@ public class TerminalService : ITerminalService
         var oldValues = new { terminal.IsActive };
         terminal.IsActive = !terminal.IsActive;
         await _context.SaveChangesAsync(cancellationToken);
+        _cache.Remove(TerminalContextService.GetTerminalCacheKey(terminal.TerminalCode));
         await _auditLogService.LogAsync("TerminalToggled", nameof(Terminal), terminal.Id.ToString(), oldValues,
             new { terminal.IsActive }, terminal.BranchId, terminal.Id, userId, cancellationToken);
     }

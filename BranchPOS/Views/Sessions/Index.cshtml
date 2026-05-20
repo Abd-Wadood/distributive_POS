@@ -5,10 +5,6 @@
 }
 
 <h1>Session / Shift</h1>
-@if (TempData["Error"] is not null)
-{
-    <div class="alert alert-danger">@TempData["Error"]</div>
-}
 @if (!Model.CanStartSession && Model.ActiveSession is null)
 {
     <div class="alert alert-warning">

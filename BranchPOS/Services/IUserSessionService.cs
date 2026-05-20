@@ -10,6 +10,8 @@ public interface IUserSessionService
 
     Task<UserSession?> GetActiveSessionAsync(string userId, CancellationToken cancellationToken = default);
 
+    Task<UserSession?> GetActiveSessionFreshAsync(string userId, CancellationToken cancellationToken = default);
+
     Task<UserSession?> GetAbandonedSessionAsync(string userId, CancellationToken cancellationToken = default);
 
     Task<UserSession?> GetActiveSessionForTerminalAsync(int terminalId, CancellationToken cancellationToken = default);
@@ -17,6 +19,10 @@ public interface IUserSessionService
     Task<UserSession> ContinueSessionAsync(int sessionId, string userId, CancellationToken cancellationToken = default);
 
     Task<SessionCloseViewModel> GetCloseSessionAsync(int sessionId, string userId, bool isManagerOrAdmin, CancellationToken cancellationToken = default);
+
+    Task<List<PendingSessionCloseApprovalViewModel>> GetPendingCloseApprovalsAsync(CancellationToken cancellationToken = default);
+
+    Task<UserSession> ApprovePendingCloseAsync(int sessionId, string approvedByUserId, int terminalId, string terminalCode, string idempotencyKey, CancellationToken cancellationToken = default);
 
     Task<UserSession> CloseSessionAsync(CloseSessionDto dto, CancellationToken cancellationToken = default);
 

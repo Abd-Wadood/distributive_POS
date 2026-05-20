@@ -552,8 +552,14 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         public Task<Terminal?> GetCurrentTerminalAsync(CancellationToken cancellationToken = default) =>
             _context.Terminals.FirstOrDefaultAsync(x => x.TerminalCode == _terminalCode && x.IsActive, cancellationToken);
 
+        public Task<Terminal?> GetCurrentTerminalFreshAsync(CancellationToken cancellationToken = default) =>
+            GetCurrentTerminalAsync(cancellationToken);
+
         public async Task<Terminal> RequireCurrentTerminalAsync(CancellationToken cancellationToken = default) =>
             await GetCurrentTerminalAsync(cancellationToken) ?? throw new InvalidOperationException("Terminal is not registered or is inactive.");
+
+        public async Task<Terminal> RequireCurrentTerminalFreshAsync(CancellationToken cancellationToken = default) =>
+            await GetCurrentTerminalFreshAsync(cancellationToken) ?? throw new InvalidOperationException("Terminal is not registered or is inactive.");
 
         public async Task HeartbeatAsync(string? userId = null, int? sessionId = null, CancellationToken cancellationToken = default)
         {
@@ -594,6 +600,17 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
             int? branchId = null,
             int? terminalId = null,
             string? userId = null,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task LogSecurityAsync(
+            string eventType,
+            string severity,
+            string message,
+            string? userId = null,
+            string? attemptedUserName = null,
+            int? branchId = null,
+            int? terminalId = null,
             CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }

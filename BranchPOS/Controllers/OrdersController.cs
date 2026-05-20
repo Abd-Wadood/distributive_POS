@@ -59,7 +59,7 @@ public class OrdersController : Controller
 
         var products = await _productAvailabilityService.GetPosProductsAsync();
         var drafts = await _orderService.ResumeDraftOrdersAsync(activeSession.Id);
-        var categories = await _context.Categories.OrderBy(x => x.Name).ToListAsync();
+        var categories = await _productAvailabilityService.GetPosCategoriesAsync();
 
         return View(new PosOrderViewModel
         {
@@ -142,7 +142,7 @@ public class OrdersController : Controller
             {
                 dto.IdempotencyKey = _idempotencyService.GetOrCreateKey();
             }
-            var terminal = await _terminalContextService.RequireCurrentTerminalAsync();
+            var terminal = await _terminalContextService.RequireCurrentTerminalFreshAsync();
             var session = await _userSessionService.GetActiveSessionAsync(dto.CashierId);
             if (session is null)
             {
