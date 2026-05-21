@@ -521,8 +521,8 @@ public class UserSessionService : IUserSessionService
             TotalPurchaseAmount = await _context.PurchaseItems
                 .Where(x => x.Purchase!.UserSessionId == session.Id)
                 .SumAsync(x => x.Quantity * x.UnitCost, cancellationToken),
-            InventoryAdjustmentsCount = await _context.InventoryTransactions.CountAsync(x => x.UserSessionId == session.Id && x.TransactionType == InventoryTransactionType.Adjustment, cancellationToken),
-            LowStockWarnings = await _context.Inventories.CountAsync(x => x.BranchId == session.BranchId && x.CurrentQuantity <= x.Ingredient!.MinimumStockLevel, cancellationToken),
+            InventoryAdjustmentsCount = await _context.InventoryMovements.CountAsync(x => x.CreatedByUserId == session.UserId && x.MovementType == InventoryMovementType.Adjustment, cancellationToken),
+            LowStockWarnings = await _context.InventoryStocks.CountAsync(x => x.BranchId == session.BranchId && x.Quantity <= x.InventoryItem!.ReorderLevel, cancellationToken),
             ExpectedClosingCash = session.ExpectedClosingCash ?? await CalculateExpectedClosingCashAsync(session.Id, session.OpeningCashAmount, cancellationToken),
             CountedClosingCash = session.CountedClosingCash,
             CashDifference = session.CashDifference

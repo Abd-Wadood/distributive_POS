@@ -31,10 +31,10 @@ public class ProductAvailabilityService : IProductAvailabilityService
         }
 
         var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
-        var requirements = await _context.ProductIngredients
+        var requirements = await _context.RecipeIngredients
             .AsNoTracking()
-            .Where(x => x.Product!.BranchId == branchId && x.ProductId == productId && x.Product.IsActive)
-            .Select(x => new IngredientRequirement(x.IngredientId, x.QuantityRequired))
+            .Where(x => x.Recipe!.BranchId == branchId && x.Recipe.ProductId == productId && x.Recipe.IsActive && x.Recipe.Product!.IsActive)
+            .Select(x => new InventoryRequirement(x.InventoryItemId, x.QuantityRequired))
             .ToListAsync(cancellationToken);
 
         if (requirements.Count == 0)
@@ -42,14 +42,15 @@ public class ProductAvailabilityService : IProductAvailabilityService
             return false;
         }
 
-        var ingredientIds = requirements.Select(x => x.IngredientId).ToList();
-        var inventory = await _context.Inventories
+        var kitchenLocationId = await GetKitchenLocationIdAsync(branchId, cancellationToken);
+        var inventoryItemIds = requirements.Select(x => x.InventoryItemId).ToList();
+        var inventory = await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.BranchId == branchId && ingredientIds.Contains(x.IngredientId))
-            .Select(x => new { x.IngredientId, x.CurrentQuantity })
-            .ToDictionaryAsync(x => x.IngredientId, x => x.CurrentQuantity, cancellationToken);
+            .Where(x => x.BranchId == branchId && x.InventoryLocationId == kitchenLocationId && inventoryItemIds.Contains(x.InventoryItemId))
+            .Select(x => new { x.InventoryItemId, x.Quantity })
+            .ToDictionaryAsync(x => x.InventoryItemId, x => x.Quantity, cancellationToken);
 
-        return requirements.All(x => inventory.TryGetValue(x.IngredientId, out var available) && available >= x.QuantityRequired * quantity);
+        return requirements.All(x => inventory.TryGetValue(x.InventoryItemId, out var available) && available >= x.QuantityRequired * quantity);
     }
 
     public async Task<HashSet<int>> GetUnavailableProductsAsync(CancellationToken cancellationToken = default)
@@ -122,13 +123,13 @@ public class ProductAvailabilityService : IProductAvailabilityService
             .ToListAsync(cancellationToken);
 
         var productIds = products.Select(x => x.Id).ToList();
-        var requirements = await _context.ProductIngredients
+        var requirements = await _context.RecipeIngredients
             .AsNoTracking()
-            .Where(x => productIds.Contains(x.ProductId))
+            .Where(x => x.Recipe!.BranchId == branchId && x.Recipe.IsActive && productIds.Contains(x.Recipe.ProductId))
             .Select(x => new
             {
-                x.ProductId,
-                Requirement = new IngredientRequirement(x.IngredientId, x.QuantityRequired)
+                x.Recipe!.ProductId,
+                Requirement = new InventoryRequirement(x.InventoryItemId, x.QuantityRequired)
             })
             .ToListAsync(cancellationToken);
 
@@ -161,29 +162,46 @@ public class ProductAvailabilityService : IProductAvailabilityService
 
     private async Task<Dictionary<int, decimal>> GetCurrentInventoryAsync(int branchId, PosMenuCacheItem menu, CancellationToken cancellationToken)
     {
-        var ingredientIds = menu.Products
+        var kitchenLocationId = await GetKitchenLocationIdAsync(branchId, cancellationToken);
+        var inventoryItemIds = menu.Products
             .SelectMany(x => x.Requirements)
-            .Select(x => x.IngredientId)
+            .Select(x => x.InventoryItemId)
             .Distinct()
             .ToList();
 
-        if (ingredientIds.Count == 0)
+        if (inventoryItemIds.Count == 0)
         {
             return [];
         }
 
         // Live inventory is intentionally not cached; final order completion also locks inventory rows in the DB.
-        return await _context.Inventories
+        return await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.BranchId == branchId && ingredientIds.Contains(x.IngredientId))
-            .Select(x => new { x.IngredientId, x.CurrentQuantity })
-            .ToDictionaryAsync(x => x.IngredientId, x => x.CurrentQuantity, cancellationToken);
+            .Where(x => x.BranchId == branchId && x.InventoryLocationId == kitchenLocationId && inventoryItemIds.Contains(x.InventoryItemId))
+            .Select(x => new { x.InventoryItemId, x.Quantity })
+            .ToDictionaryAsync(x => x.InventoryItemId, x => x.Quantity, cancellationToken);
     }
 
     private static bool CanMakeOne(PosProductMenuItem product, Dictionary<int, decimal> inventory) =>
         product.IsActive &&
         product.Requirements.Count > 0 &&
-        product.Requirements.All(x => inventory.TryGetValue(x.IngredientId, out var available) && available >= x.QuantityRequired);
+        product.Requirements.All(x => inventory.TryGetValue(x.InventoryItemId, out var available) && available >= x.QuantityRequired);
+
+    private async Task<int> GetKitchenLocationIdAsync(int branchId, CancellationToken cancellationToken)
+    {
+        var location = await _context.InventoryLocations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BranchId == branchId && x.Name == "Kitchen", cancellationToken);
+        if (location is not null)
+        {
+            return location.Id;
+        }
+
+        location = new InventoryLocation { BranchId = branchId, Name = "Kitchen" };
+        _context.InventoryLocations.Add(location);
+        await _context.SaveChangesAsync(cancellationToken);
+        return location.Id;
+    }
 
     private sealed record PosMenuCacheItem(List<PosProductMenuItem> Products, List<PosCategoryMenuItem> Categories);
 
@@ -196,10 +214,10 @@ public class ProductAvailabilityService : IProductAvailabilityService
         bool IsActive,
         string? ImagePath)
     {
-        public List<IngredientRequirement> Requirements { get; init; } = [];
+        public List<InventoryRequirement> Requirements { get; init; } = [];
     }
 
     private sealed record PosCategoryMenuItem(int Id, string Name);
 
-    private sealed record IngredientRequirement(int IngredientId, decimal QuantityRequired);
+    private sealed record InventoryRequirement(int InventoryItemId, decimal QuantityRequired);
 }

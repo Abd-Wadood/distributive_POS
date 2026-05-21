@@ -25,7 +25,7 @@ public class Product
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    public ICollection<ProductIngredient> ProductIngredients { get; set; } = new List<ProductIngredient>();
+    public ICollection<Recipe> Recipes { get; set; } = new List<Recipe>();
 
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 }

@@ -12,9 +12,9 @@ public class PurchaseItem
 
     public Purchase? Purchase { get; set; }
 
-    public int IngredientId { get; set; }
+    public int? InventoryItemId { get; set; }
 
-    public Ingredient? Ingredient { get; set; }
+    public InventoryItem? InventoryItem { get; set; }
 
     public decimal Quantity { get; set; }
 

@@ -101,7 +101,7 @@ public class ProductsController : Controller
 
         await _productService.CreateProductAsync(
             new Product { Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
-            model.Ingredients.ToDictionary(x => x.IngredientId, x => x.QuantityRequired));
+            model.RecipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired));
 
         return RedirectToAction(nameof(Index));
     }
@@ -141,7 +141,7 @@ public class ProductsController : Controller
 
         await _productService.UpdateProductAsync(
             new Product { Id = model.Id, Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
-            model.Ingredients.ToDictionary(x => x.IngredientId, x => x.QuantityRequired));
+            model.RecipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired));
 
         return RedirectToAction(nameof(Index));
     }
@@ -153,14 +153,15 @@ public class ProductsController : Controller
             .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.CategoryId))
             .ToListAsync();
 
-        var existingQuantities = product?.ProductIngredients.ToDictionary(x => x.IngredientId, x => x.QuantityRequired) ?? [];
+        var existingQuantities = product?.Recipes.FirstOrDefault(x => x.IsActive)?.Ingredients.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired) ?? [];
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        var ingredients = await _context.Ingredients
-            .Where(x => x.BranchId == branchId)
+        var inventoryItems = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive)
             .OrderBy(x => x.Name)
+            .ThenBy(x => x.Unit)
             .ToListAsync();
-        model.Ingredients = ingredients
-            .Select(x => IngredientQuantityViewModel.FromIngredient(x, existingQuantities.TryGetValue(x.Id, out var quantity) ? quantity : 0))
+        model.RecipeItems = inventoryItems
+            .Select(x => RecipeItemQuantityViewModel.FromInventoryItem(x, existingQuantities.TryGetValue(x.Id, out var quantity) ? quantity : 0))
             .ToList();
 
         return model;

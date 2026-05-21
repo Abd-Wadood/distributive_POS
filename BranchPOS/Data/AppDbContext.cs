@@ -14,11 +14,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Branch> Branches => Set<Branch>();
-    public DbSet<Ingredient> Ingredients => Set<Ingredient>();
+    public DbSet<InventoryLocation> InventoryLocations => Set<InventoryLocation>();
+    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<InventoryStock> InventoryStocks => Set<InventoryStock>();
+    public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
+    public DbSet<KitchenRequest> KitchenRequests => Set<KitchenRequest>();
+    public DbSet<KitchenRequestDetail> KitchenRequestDetails => Set<KitchenRequestDetail>();
+    public DbSet<Recipe> Recipes => Set<Recipe>();
+    public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+    public DbSet<OperationalExpense> OperationalExpenses => Set<OperationalExpense>();
     public DbSet<Product> Products => Set<Product>();
-    public DbSet<ProductIngredient> ProductIngredients => Set<ProductIngredient>();
-    public DbSet<Inventory> Inventories => Set<Inventory>();
-    public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
@@ -62,19 +68,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        builder.Entity<Ingredient>(entity =>
-        {
-            entity.HasIndex(x => new { x.BranchId, x.Name }).IsUnique();
-            entity.HasIndex(x => x.BranchId);
-            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
-            entity.Property(x => x.UnitType).HasMaxLength(40).IsRequired();
-            entity.Property(x => x.MinimumStockLevel).HasPrecision(18, 3);
-            entity.HasOne(x => x.Branch)
-                .WithMany()
-                .HasForeignKey(x => x.BranchId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
         builder.Entity<Product>(entity =>
         {
             entity.HasIndex(x => new { x.BranchId, x.Name });
@@ -92,72 +85,186 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        builder.Entity<ProductIngredient>(entity =>
+        builder.Entity<InventoryLocation>(entity =>
         {
-            entity.HasIndex(x => new { x.ProductId, x.IngredientId }).IsUnique();
-            entity.Property(x => x.QuantityRequired).HasPrecision(18, 3);
-            entity.HasOne(x => x.Product)
-                .WithMany(x => x.ProductIngredients)
-                .HasForeignKey(x => x.ProductId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(x => x.Ingredient)
-                .WithMany(x => x.ProductIngredients)
-                .HasForeignKey(x => x.IngredientId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        builder.Entity<Inventory>(entity =>
-        {
-            entity.ToTable(t => t.HasCheckConstraint("CK_Inventories_CurrentQuantity_NonNegative", "\"CurrentQuantity\" >= 0"));
-            entity.HasIndex(x => new { x.BranchId, x.IngredientId }).IsUnique();
-            entity.HasIndex(x => x.BranchId);
-            entity.HasIndex(x => new { x.BranchId, x.CurrentQuantity }).HasDatabaseName("IX_Inventories_BranchId_CurrentQuantity");
-            entity.Property(x => x.CurrentQuantity).HasPrecision(18, 3);
+            entity.HasIndex(x => new { x.BranchId, x.Name }).IsUnique().HasDatabaseName("UX_InventoryLocations_BranchId_Name");
+            entity.HasIndex(x => new { x.BranchId, x.IsActive }).HasDatabaseName("IX_InventoryLocations_BranchId_IsActive");
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(x => x.Ingredient)
-                .WithOne(x => x.Inventory)
-                .HasForeignKey<Inventory>(x => x.IngredientId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<InventoryTransaction>(entity =>
+        builder.Entity<InventoryItem>(entity =>
         {
-            entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_InventoryTransactions_PublicId");
-            entity.HasIndex(x => x.IdempotencyKey)
+            entity.HasIndex(x => new { x.BranchId, x.Name, x.Unit }).IsUnique().HasDatabaseName("UX_InventoryItems_BranchId_Name_Unit");
+            entity.HasIndex(x => new { x.BranchId, x.IsActive }).HasDatabaseName("IX_InventoryItems_BranchId_IsActive");
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Unit).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.ReorderLevel).HasPrecision(18, 3);
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<InventoryStock>(entity =>
+        {
+            entity.ToTable(t => t.HasCheckConstraint("CK_InventoryStocks_Quantity_NonNegative", "\"Quantity\" >= 0"));
+            entity.Property<uint>("xmin").IsRowVersion();
+            entity.HasIndex(x => new { x.InventoryItemId, x.InventoryLocationId }).IsUnique().HasDatabaseName("UX_InventoryStocks_Item_Location");
+            entity.HasIndex(x => x.BranchId);
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.Property(x => x.AverageUnitCost).HasPrecision(18, 4);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany(x => x.Stocks)
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryLocation)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryLocationId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<InventoryMovement>(entity =>
+        {
+            entity.HasIndex(x => x.InventoryItemId).HasDatabaseName("IX_InventoryMovements_InventoryItemId");
+            entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_InventoryMovements_CreatedAt");
+            entity.HasIndex(x => x.MovementType).HasDatabaseName("IX_InventoryMovements_MovementType");
+            entity.HasIndex(x => new { x.ReferenceType, x.ReferenceId }).HasDatabaseName("IX_InventoryMovements_Reference");
+            entity.Property(x => x.Quantity).HasPrecision(18, 3);
+            entity.Property(x => x.UnitCost).HasPrecision(18, 4);
+            entity.Property(x => x.TotalCost).HasPrecision(18, 2);
+            entity.Property(x => x.MovementType).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.ReferenceType).HasMaxLength(80);
+            entity.Property(x => x.Note).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany(x => x.Movements)
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.FromLocation)
+                .WithMany()
+                .HasForeignKey(x => x.FromLocationId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ToLocation)
+                .WithMany()
+                .HasForeignKey(x => x.ToLocationId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<KitchenRequest>(entity =>
+        {
+            entity.HasIndex(x => x.RequestNumber).IsUnique().HasDatabaseName("UX_KitchenRequests_RequestNumber");
+            entity.HasIndex(x => x.Status).HasDatabaseName("IX_KitchenRequests_Status");
+            entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_KitchenRequests_CreatedAt");
+            entity.Property(x => x.RequestNumber).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.Note).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.RequestedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.RequestedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.ApprovedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ApprovedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<KitchenRequestDetail>(entity =>
+        {
+            entity.Property(x => x.RequestedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.ApprovedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.DispatchedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.Note).HasMaxLength(300);
+            entity.HasOne(x => x.KitchenRequest)
+                .WithMany(x => x.Details)
+                .HasForeignKey(x => x.KitchenRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Recipe>(entity =>
+        {
+            entity.HasIndex(x => x.ProductId).HasDatabaseName("IX_Recipes_ProductId");
+            entity.HasIndex(x => x.ProductId)
                 .IsUnique()
-                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
-                .HasDatabaseName("UX_InventoryTransactions_IdempotencyKey");
-            entity.HasIndex(x => x.BranchId);
-            entity.HasIndex(x => x.TerminalId);
-            entity.HasIndex(x => x.UserSessionId);
-            entity.HasIndex(x => new { x.IngredientId, x.CreatedAt });
-            entity.HasIndex(x => new { x.TransactionType, x.ReferenceId });
-            entity.Property(x => x.QuantityChanged).HasPrecision(18, 3);
-            entity.Property(x => x.TerminalCode).HasMaxLength(40).IsRequired();
-            entity.Property(x => x.TransactionType).HasConversion<string>().HasMaxLength(40);
+                .HasFilter("\"IsActive\" = TRUE")
+                .HasDatabaseName("UX_Recipes_ProductId_Active");
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(x => x.UserSession)
+            entity.HasOne(x => x.Product)
+                .WithMany(x => x.Recipes)
+                .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RecipeIngredient>(entity =>
+        {
+            entity.HasIndex(x => new { x.RecipeId, x.InventoryItemId }).IsUnique().HasDatabaseName("UX_RecipeIngredients_RecipeId_Item");
+            entity.Property(x => x.QuantityRequired).HasPrecision(18, 3);
+            entity.HasOne(x => x.Recipe)
+                .WithMany(x => x.Ingredients)
+                .HasForeignKey(x => x.RecipeId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany(x => x.RecipeIngredients)
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ExpenseCategory>(entity =>
+        {
+            entity.HasIndex(x => new { x.BranchId, x.Name }).IsUnique().HasDatabaseName("UX_ExpenseCategories_BranchId_Name");
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasOne(x => x.Branch)
                 .WithMany()
-                .HasForeignKey(x => x.UserSessionId)
+                .HasForeignKey(x => x.BranchId)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(x => x.PerformedByUser)
+        });
+
+        builder.Entity<OperationalExpense>(entity =>
+        {
+            entity.HasIndex(x => x.ExpenseDate).HasDatabaseName("IX_OperationalExpenses_ExpenseDate");
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.Description).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
                 .WithMany()
-                .HasForeignKey(x => x.PerformedByUserId)
+                .HasForeignKey(x => x.BranchId)
                 .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(x => x.Terminal)
+            entity.HasOne(x => x.ExpenseCategory)
+                .WithMany(x => x.Expenses)
+                .HasForeignKey(x => x.ExpenseCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreatedByUser)
                 .WithMany()
-                .HasForeignKey(x => x.TerminalId)
-                .OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(x => x.Ingredient)
-                .WithMany(x => x.InventoryTransactions)
-                .HasForeignKey(x => x.IngredientId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Supplier>(entity =>
@@ -210,7 +317,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         builder.Entity<PurchaseItem>(entity =>
         {
             entity.HasIndex(x => x.BranchId);
-            entity.HasIndex(x => new { x.PurchaseId, x.IngredientId });
+            entity.HasIndex(x => new { x.PurchaseId, x.InventoryItemId });
             entity.Property(x => x.Quantity).HasPrecision(18, 3);
             entity.Property(x => x.UnitCost).HasPrecision(18, 2);
             entity.HasOne(x => x.Branch)
@@ -221,9 +328,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany(x => x.Items)
                 .HasForeignKey(x => x.PurchaseId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(x => x.Ingredient)
-                .WithMany(x => x.PurchaseItems)
-                .HasForeignKey(x => x.IngredientId)
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -515,6 +622,67 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
+
+        var seedDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        builder.Entity<InventoryLocation>().HasData(
+            new InventoryLocation { Id = 1, BranchId = 1, Name = "Stock Room", IsActive = true, CreatedAt = seedDate },
+            new InventoryLocation { Id = 2, BranchId = 1, Name = "Kitchen", IsActive = true, CreatedAt = seedDate });
+
+        builder.Entity<InventoryItem>().HasData(
+            new InventoryItem { Id = 1, BranchId = 1, Name = "Coca-Cola", Unit = "0.5L Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 2, BranchId = 1, Name = "Coca-Cola", Unit = "1L Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 3, BranchId = 1, Name = "Coca-Cola", Unit = "1.5L Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 4, BranchId = 1, Name = "Coca-Cola", Unit = "300ML Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 5, BranchId = 1, Name = "Aluminium Foil", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 6, BranchId = 1, Name = "BBQ Sauce", Unit = "Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 7, BranchId = 1, Name = "Black Olives", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 8, BranchId = 1, Name = "Cheese", Unit = "Kg", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 9, BranchId = 1, Name = "Chicken Patty", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 10, BranchId = 1, Name = "Cling Film", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 11, BranchId = 1, Name = "Cooking Oil", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 12, BranchId = 1, Name = "Eka", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 13, BranchId = 1, Name = "F1 Packing", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 14, BranchId = 1, Name = "F2 Packing", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 15, BranchId = 1, Name = "Food Bag Large", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 16, BranchId = 1, Name = "Forks", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 17, BranchId = 1, Name = "Fries", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 18, BranchId = 1, Name = "Fry Oil", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 19, BranchId = 1, Name = "Gas Cylinder", Unit = "Refill", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 20, BranchId = 1, Name = "Ice Sugar", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 21, BranchId = 1, Name = "Imli Sauce", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 22, BranchId = 1, Name = "Jalapeño", Unit = "Jar", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 23, BranchId = 1, Name = "Mayonnaise", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 24, BranchId = 1, Name = "Medium Food Bags", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 25, BranchId = 1, Name = "Mushrooms", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 26, BranchId = 1, Name = "Mustard Sauce", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 27, BranchId = 1, Name = "Nido", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 28, BranchId = 1, Name = "Nuggets", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 29, BranchId = 1, Name = "Paratha", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 30, BranchId = 1, Name = "Pepperoni", Unit = "Kg", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 31, BranchId = 1, Name = "Peri Peri Sauce", Unit = "Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 32, BranchId = 1, Name = "Pizza Sauce", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 33, BranchId = 1, Name = "Pizza Table", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 34, BranchId = 1, Name = "Printer Rolls", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 35, BranchId = 1, Name = "Sandwich Packing", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 36, BranchId = 1, Name = "Sausages", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 37, BranchId = 1, Name = "Sweet Corn", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 38, BranchId = 1, Name = "Tomato Chilly Sachet", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 39, BranchId = 1, Name = "Tape Roll", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 40, BranchId = 1, Name = "Tikka Masala", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 41, BranchId = 1, Name = "Tissue Roll", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 42, BranchId = 1, Name = "Yeast", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 43, BranchId = 1, Name = "Zinger Recipe Masala", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate });
+
+        builder.Entity<ExpenseCategory>().HasData(
+            new ExpenseCategory { Id = 1, BranchId = 1, Name = "Rent", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 2, BranchId = 1, Name = "Electricity", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 3, BranchId = 1, Name = "Gas", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 4, BranchId = 1, Name = "Salaries", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 5, BranchId = 1, Name = "Internet", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 6, BranchId = 1, Name = "Repair", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 7, BranchId = 1, Name = "Cleaning", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 8, BranchId = 1, Name = "Transport", IsActive = true, CreatedAt = seedDate },
+            new ExpenseCategory { Id = 9, BranchId = 1, Name = "Miscellaneous", IsActive = true, CreatedAt = seedDate });
     }
 
     public override int SaveChanges()
@@ -534,11 +702,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         var now = DateTime.UtcNow;
         foreach (var entry in ChangeTracker.Entries())
         {
-            if (entry.Entity is InventoryTransaction)
-            {
-                continue;
-            }
-
             if (entry.State == EntityState.Added && entry.Properties.Any(x => x.Metadata.Name == "CreatedAt"))
             {
                 entry.Property("CreatedAt").CurrentValue = now;

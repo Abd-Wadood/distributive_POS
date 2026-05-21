@@ -22,8 +22,9 @@ public class ProductService : IProductService
         var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
         return await _context.Products
             .Include(x => x.Category)
-            .Include(x => x.ProductIngredients)
-            .ThenInclude(x => x.Ingredient)
+            .Include(x => x.Recipes.Where(r => r.IsActive))
+            .ThenInclude(x => x.Ingredients)
+            .ThenInclude(x => x.InventoryItem)
             .Where(x => x.BranchId == branchId)
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
@@ -33,21 +34,30 @@ public class ProductService : IProductService
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
         return await _context.Products
-            .Include(x => x.ProductIngredients)
-            .ThenInclude(x => x.Ingredient)
+            .Include(x => x.Recipes.Where(r => r.IsActive))
+            .ThenInclude(x => x.Ingredients)
+            .ThenInclude(x => x.InventoryItem)
             .FirstOrDefaultAsync(x => x.BranchId == branchId && x.Id == id, cancellationToken);
     }
 
-    public async Task CreateProductAsync(Product product, Dictionary<int, decimal> ingredientQuantities, CancellationToken cancellationToken = default)
+    public async Task CreateProductAsync(Product product, Dictionary<int, decimal> recipeItemQuantities, CancellationToken cancellationToken = default)
     {
         product.BranchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
-        foreach (var pair in ingredientQuantities.Where(x => x.Value > 0))
+        var normalized = recipeItemQuantities.Where(x => x.Value > 0).ToDictionary(x => x.Key, x => x.Value);
+        await EnsureInventoryItemsBelongToBranchAsync(product.BranchId, normalized.Keys, cancellationToken);
+        if (normalized.Count > 0)
         {
-            product.ProductIngredients.Add(new ProductIngredient
+            var recipe = new Recipe { BranchId = product.BranchId, Product = product, IsActive = true };
+            foreach (var pair in normalized)
             {
-                IngredientId = pair.Key,
-                QuantityRequired = pair.Value
-            });
+                recipe.Ingredients.Add(new RecipeIngredient
+                {
+                    InventoryItemId = pair.Key,
+                    QuantityRequired = pair.Value
+                });
+            }
+
+            product.Recipes.Add(recipe);
         }
 
         _context.Products.Add(product);
@@ -55,11 +65,12 @@ public class ProductService : IProductService
         _posMenuCacheInvalidator.Invalidate();
     }
 
-    public async Task UpdateProductAsync(Product product, Dictionary<int, decimal> ingredientQuantities, CancellationToken cancellationToken = default)
+    public async Task UpdateProductAsync(Product product, Dictionary<int, decimal> recipeItemQuantities, CancellationToken cancellationToken = default)
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
         var existing = await _context.Products
-            .Include(x => x.ProductIngredients)
+            .Include(x => x.Recipes.Where(r => r.IsActive))
+            .ThenInclude(x => x.Ingredients)
             .FirstOrDefaultAsync(x => x.Id == product.Id && x.BranchId == branchId, cancellationToken);
 
         if (existing is null)
@@ -70,18 +81,46 @@ public class ProductService : IProductService
         existing.Name = product.Name;
         existing.Price = product.Price;
         existing.CategoryId = product.CategoryId;
-        existing.ProductIngredients.Clear();
+        var normalized = recipeItemQuantities.Where(x => x.Value > 0).ToDictionary(x => x.Key, x => x.Value);
+        await EnsureInventoryItemsBelongToBranchAsync(branchId, normalized.Keys, cancellationToken);
 
-        foreach (var pair in ingredientQuantities.Where(x => x.Value > 0))
+        var recipe = existing.Recipes.FirstOrDefault(x => x.IsActive);
+        if (recipe is null && normalized.Count > 0)
         {
-            existing.ProductIngredients.Add(new ProductIngredient
+            recipe = new Recipe { BranchId = branchId, ProductId = existing.Id, IsActive = true };
+            existing.Recipes.Add(recipe);
+        }
+
+        if (recipe is not null)
+        {
+            recipe.BranchId = branchId;
+            recipe.Ingredients.Clear();
+            foreach (var pair in normalized)
             {
-                IngredientId = pair.Key,
-                QuantityRequired = pair.Value
-            });
+                recipe.Ingredients.Add(new RecipeIngredient
+                {
+                    InventoryItemId = pair.Key,
+                    QuantityRequired = pair.Value
+                });
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
         _posMenuCacheInvalidator.Invalidate();
+    }
+
+    private async Task EnsureInventoryItemsBelongToBranchAsync(int branchId, IEnumerable<int> inventoryItemIds, CancellationToken cancellationToken)
+    {
+        var ids = inventoryItemIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        var count = await _context.InventoryItems.CountAsync(x => x.BranchId == branchId && x.IsActive && ids.Contains(x.Id), cancellationToken);
+        if (count != ids.Count)
+        {
+            throw new InvalidOperationException("One or more recipe inventory items do not belong to the active branch.");
+        }
     }
 }

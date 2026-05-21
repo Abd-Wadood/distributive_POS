@@ -4,8 +4,7 @@ namespace BranchPOS.DTOs;
 
 public class PurchaseItemDto
 {
-    [Range(1, int.MaxValue)]
-    public int IngredientId { get; set; }
+    public int InventoryItemId { get; set; }
 
     [Range(typeof(decimal), "0.001", "1000000")]
     public decimal Quantity { get; set; }

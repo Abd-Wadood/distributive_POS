@@ -1,0 +1,30 @@
+@model BranchPOS.Models.KitchenRequest
+@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    ViewData["Title"] = "New Kitchen Request";
+    var items = (IEnumerable<SelectListItem>)ViewBag.InventoryItems;
+}
+
+<h1>New Kitchen Request</h1>
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="Note" class="form-label"></label>
+        <input asp-for="Note" class="form-control" />
+    </div>
+    <table class="table">
+        <thead><tr><th>Item</th><th>Requested quantity</th><th>Note</th></tr></thead>
+        <tbody>
+        @for (var i = 0; i < Model.Details.Count; i++)
+        {
+            <tr>
+                <td><select asp-for="Details[i].InventoryItemId" asp-items="items" class="form-select"><option value="">Select item</option></select></td>
+                <td><input asp-for="Details[i].RequestedQuantity" class="form-control" type="number" step="0.001" /></td>
+                <td><input asp-for="Details[i].Note" class="form-control" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <button class="btn btn-primary" type="submit">Create request</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>

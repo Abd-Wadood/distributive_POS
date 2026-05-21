@@ -1,0 +1,25 @@
+@model IEnumerable<BranchPOS.Models.InventoryMovement>
+@{
+    ViewData["Title"] = "Inventory Movements";
+}
+
+<h1>Inventory Movements</h1>
+<table class="table table-striped">
+    <thead><tr><th>Date</th><th>Item</th><th>From</th><th>To</th><th>Type</th><th>Quantity</th><th>Reference</th><th>Created by</th><th>Note</th></tr></thead>
+    <tbody>
+    @foreach (var movement in Model)
+    {
+        <tr>
+            <td>@movement.CreatedAt.ToLocalTime()</td>
+            <td>@movement.InventoryItem?.Name</td>
+            <td>@movement.FromLocation?.Name</td>
+            <td>@movement.ToLocation?.Name</td>
+            <td>@movement.MovementType</td>
+            <td>@movement.Quantity.ToString("0.###")</td>
+            <td>@movement.ReferenceType @movement.ReferenceId</td>
+            <td>@movement.CreatedByUser?.UserName</td>
+            <td>@movement.Note</td>
+        </tr>
+    }
+    </tbody>
+</table>

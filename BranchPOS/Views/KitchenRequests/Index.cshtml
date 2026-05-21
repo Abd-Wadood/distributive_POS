@@ -1,0 +1,59 @@
+@model IEnumerable<BranchPOS.Models.KitchenRequest>
+@{
+    ViewData["Title"] = "Kitchen Requests";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Kitchen Requests</h1>
+    <a class="btn btn-primary" asp-action="Create">New request</a>
+</div>
+
+<table class="table table-striped align-middle">
+    <thead><tr><th>Request</th><th>Status</th><th>Dates</th><th>Details</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var request in Model)
+    {
+        <tr>
+            <td>@request.RequestNumber</td>
+            <td>@request.Status</td>
+            <td>
+                Created @request.CreatedAt.ToLocalTime()
+                @if (request.ApprovedAt.HasValue) { <div>Approved @request.ApprovedAt.Value.ToLocalTime()</div> }
+                @if (request.DispatchedAt.HasValue) { <div>Dispatched @request.DispatchedAt.Value.ToLocalTime()</div> }
+            </td>
+            <td>
+                @foreach (var detail in request.Details)
+                {
+                    <div>
+                        @detail.InventoryItem?.Name:
+                        requested @detail.RequestedQuantity.ToString("0.###"),
+                        approved @((detail.ApprovedQuantity ?? 0).ToString("0.###")),
+                        dispatched @((detail.DispatchedQuantity ?? 0).ToString("0.###"))
+                    </div>
+                }
+            </td>
+            <td class="text-end">
+                @if (request.Status == BranchPOS.Models.KitchenRequestStatus.Pending)
+                {
+                    <form asp-action="Approve" asp-route-id="@request.Id" method="post" class="mb-2">
+                        @foreach (var detail in request.Details)
+                        {
+                            <input name="approvedQuantities[@detail.Id]" value="@detail.RequestedQuantity" class="form-control form-control-sm mb-1" type="number" step="0.001" />
+                        }
+                        <button class="btn btn-sm btn-success" type="submit">Approve</button>
+                    </form>
+                    <form asp-action="Reject" asp-route-id="@request.Id" method="post">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+                    </form>
+                }
+                @if (request.Status == BranchPOS.Models.KitchenRequestStatus.Approved)
+                {
+                    <form asp-action="Dispatch" asp-route-id="@request.Id" method="post">
+                        <button class="btn btn-sm btn-primary" type="submit">Dispatch</button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

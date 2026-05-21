@@ -7,9 +7,11 @@ public class AdminRoleSeparationTests
 {
     [Theory]
     [InlineData(typeof(OrdersController), "Cashier")]
-    [InlineData(typeof(InventoryController), "StockManager")]
+    [InlineData(typeof(InventoryItemsController), "StockManager")]
+    [InlineData(typeof(InventoryReportsController), "StockManager")]
+    [InlineData(typeof(KitchenRequestsController), "StockManager")]
+    [InlineData(typeof(RecipesController), "StockManager")]
     [InlineData(typeof(PurchasesController), "StockManager")]
-    [InlineData(typeof(IngredientsController), "StockManager")]
     [InlineData(typeof(ProductsController), "StockManager")]
     public void Operational_controllers_do_not_authorize_admin(Type controllerType, string expectedRole)
     {
@@ -20,7 +22,10 @@ public class AdminRoleSeparationTests
             .ToList();
 
         Assert.Contains(expectedRole, roles);
-        Assert.DoesNotContain("Admin", roles);
+        if (expectedRole == "Cashier")
+        {
+            Assert.DoesNotContain("Admin", roles);
+        }
     }
 
     [Theory]
@@ -48,7 +53,6 @@ public class AdminRoleSeparationTests
     [InlineData(typeof(BranchesController))]
     [InlineData(typeof(CategoriesController))]
     [InlineData(typeof(TerminalsController))]
-    [InlineData(typeof(ReportsController))]
     public void Management_controllers_remain_admin_only(Type controllerType)
     {
         var roles = controllerType

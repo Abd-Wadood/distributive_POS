@@ -122,10 +122,13 @@ public class OrderService : IOrderService
             var requestedItems = NormalizeItems(dto.Items);
             var customer = await _customerService.CreateOrUpdateCustomerAsync(dto.Customer, cancellationToken);
             var pricedItems = await BuildPricedItemsAsync(requestedItems, dto.BranchId, cancellationToken);
-            var requiredIngredients = BuildRequiredIngredients(pricedItems);
-            var lockedInventories = await LockInventoriesAsync(requiredIngredients.Keys, dto.BranchId, cancellationToken);
-
-            ValidateStock(requiredIngredients, lockedInventories);
+            InventoryLocation? kitchen = null;
+            Dictionary<int, RequiredInventoryItem> requiredInventoryItems = [];
+            List<InventoryStock> lockedInventoryStocks = [];
+            kitchen = await GetOrCreateLocationAsync(dto.BranchId, "Kitchen", cancellationToken);
+            requiredInventoryItems = BuildRequiredInventoryItems(pricedItems);
+            lockedInventoryStocks = await LockInventoryStocksAsync(requiredInventoryItems.Keys, dto.BranchId, kitchen.Id, cancellationToken);
+            ValidateStock(requiredInventoryItems, lockedInventoryStocks);
 
             var order = dto.DraftOrderId.HasValue
                 ? await _context.Orders.Include(x => x.Items).FirstOrDefaultAsync(x =>
@@ -162,22 +165,22 @@ public class OrderService : IOrderService
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            foreach (var required in requiredIngredients)
+            foreach (var required in requiredInventoryItems)
             {
-                var inventory = lockedInventories.Single(x => x.IngredientId == required.Key);
-                inventory.CurrentQuantity -= required.Value;
-                _context.InventoryTransactions.Add(new InventoryTransaction
+                var inventory = lockedInventoryStocks.Single(x => x.InventoryItemId == required.Key);
+                inventory.Quantity -= required.Value.Quantity;
+                _context.InventoryMovements.Add(new InventoryMovement
                 {
                     BranchId = dto.BranchId,
-                    IngredientId = required.Key,
-                    UserSessionId = dto.UserSessionId,
-                    PerformedByUserId = dto.CashierId,
-                    TerminalId = dto.TerminalId,
-                    TerminalCode = dto.TerminalCode,
-                    IdempotencyKey = $"{dto.IdempotencyKey}:{required.Key}",
-                    TransactionType = InventoryTransactionType.Sale,
-                    QuantityChanged = -required.Value,
-                    ReferenceId = order.Id
+                    InventoryItemId = required.Key,
+                    FromLocationId = kitchen!.Id,
+                    Quantity = required.Value.Quantity,
+                    UnitCost = inventory.AverageUnitCost,
+                    TotalCost = required.Value.Quantity * inventory.AverageUnitCost,
+                    MovementType = InventoryMovementType.Consumption,
+                    ReferenceType = nameof(Order),
+                    ReferenceId = order.Id,
+                    CreatedByUserId = dto.CashierId
                 });
             }
 
@@ -332,7 +335,9 @@ public class OrderService : IOrderService
     {
         var productIds = requestedItems.Select(x => x.ProductId).ToList();
         var products = await _context.Products
-            .Include(x => x.ProductIngredients)
+            .Include(x => x.Recipes.Where(r => r.IsActive))
+            .ThenInclude(x => x.Ingredients)
+            .ThenInclude(x => x.InventoryItem)
             .Where(x => x.BranchId == branchId && x.IsActive && productIds.Contains(x.Id))
             .ToListAsync(cancellationToken);
 
@@ -345,9 +350,9 @@ public class OrderService : IOrderService
         foreach (var requestedItem in requestedItems)
         {
             var product = products.Single(x => x.Id == requestedItem.ProductId);
-            if (requireRecipe && product.ProductIngredients.Count == 0)
+            if (requireRecipe && !product.Recipes.Any(x => x.IsActive && x.Ingredients.Count > 0))
             {
-                throw new BusinessException($"{product.Name} cannot be sold because its recipe is incomplete.");
+                throw new BusinessException($"Recipe not configured for product {product.Name}.");
             }
 
             pricedItems.Add(new PricedOrderItem(product, requestedItem.Quantity));
@@ -356,38 +361,61 @@ public class OrderService : IOrderService
         return pricedItems;
     }
 
-    private static Dictionary<int, decimal> BuildRequiredIngredients(List<PricedOrderItem> pricedItems)
+    private static Dictionary<int, RequiredInventoryItem> BuildRequiredInventoryItems(List<PricedOrderItem> pricedItems)
     {
-        var requiredIngredients = new Dictionary<int, decimal>();
+        var requiredIngredients = new Dictionary<int, RequiredInventoryItem>();
         foreach (var pricedItem in pricedItems)
         {
-            if (pricedItem.Product.ProductIngredients.Count == 0)
+            var recipe = pricedItem.Product.Recipes.FirstOrDefault(x => x.IsActive);
+            if (recipe is null || recipe.Ingredients.Count == 0)
             {
-                throw new BusinessException($"{pricedItem.Product.Name} cannot be sold because its recipe is incomplete.");
+                throw new BusinessException($"Recipe not configured for product {pricedItem.Product.Name}.");
             }
 
-            foreach (var recipeItem in pricedItem.Product.ProductIngredients)
+            if (recipe.BranchId != pricedItem.Product.BranchId)
             {
-                requiredIngredients.TryAdd(recipeItem.IngredientId, 0);
-                requiredIngredients[recipeItem.IngredientId] += recipeItem.QuantityRequired * pricedItem.Quantity;
+                throw new BusinessException($"Recipe branch does not match product branch for {pricedItem.Product.Name}.");
+            }
+
+            foreach (var recipeItem in recipe.Ingredients)
+            {
+                if (recipeItem.InventoryItem is null)
+                {
+                    throw new BusinessException($"Recipe for {pricedItem.Product.Name} has an invalid inventory item.");
+                }
+
+                if (recipeItem.InventoryItem.BranchId != pricedItem.Product.BranchId)
+                {
+                    throw new BusinessException($"Recipe inventory item branch does not match product branch for {pricedItem.Product.Name}.");
+                }
+
+                var requiredQuantity = recipeItem.QuantityRequired * pricedItem.Quantity;
+                if (requiredIngredients.TryGetValue(recipeItem.InventoryItemId, out var existing))
+                {
+                    requiredIngredients[recipeItem.InventoryItemId] = existing with { Quantity = existing.Quantity + requiredQuantity };
+                }
+                else
+                {
+                    requiredIngredients[recipeItem.InventoryItemId] = new RequiredInventoryItem(recipeItem.InventoryItem.Name, recipeItem.InventoryItem.Unit, requiredQuantity);
+                }
             }
         }
 
         return requiredIngredients;
     }
 
-    private async Task<List<Inventory>> LockInventoriesAsync(IEnumerable<int> ingredientIds, int branchId, CancellationToken cancellationToken)
+    private async Task<List<InventoryStock>> LockInventoryStocksAsync(IEnumerable<int> inventoryItemIds, int branchId, int kitchenLocationId, CancellationToken cancellationToken)
     {
-        var lockedInventories = new List<Inventory>();
-        foreach (var ingredientId in ingredientIds.OrderBy(x => x))
+        var lockedInventories = new List<InventoryStock>();
+        foreach (var inventoryItemId in inventoryItemIds.OrderBy(x => x))
         {
-            var inventory = await _context.Inventories
-                .FromSqlInterpolated($"SELECT * FROM \"Inventories\" WHERE \"BranchId\" = {branchId} AND \"IngredientId\" = {ingredientId} FOR UPDATE")
+            var inventory = await _context.InventoryStocks
+                .FromSqlInterpolated($"SELECT *, xmin FROM \"InventoryStocks\" WHERE \"BranchId\" = {branchId} AND \"InventoryItemId\" = {inventoryItemId} AND \"InventoryLocationId\" = {kitchenLocationId} FOR UPDATE")
                 .SingleOrDefaultAsync(cancellationToken);
 
             if (inventory is null)
             {
-                throw new BusinessException("Product recipe is missing an inventory record. Ask a StockManager to review ingredients.");
+                throw new BusinessException("Product recipe is missing a kitchen inventory record. Ask a StockManager to dispatch stock to the kitchen.");
             }
 
             lockedInventories.Add(inventory);
@@ -396,16 +424,30 @@ public class OrderService : IOrderService
         return lockedInventories;
     }
 
-    private static void ValidateStock(Dictionary<int, decimal> requiredIngredients, List<Inventory> lockedInventories)
+    private static void ValidateStock(Dictionary<int, RequiredInventoryItem> requiredIngredients, List<InventoryStock> lockedInventories)
     {
         foreach (var required in requiredIngredients)
         {
-            var inventory = lockedInventories.Single(x => x.IngredientId == required.Key);
-            if (inventory.CurrentQuantity < required.Value)
+            var inventory = lockedInventories.Single(x => x.InventoryItemId == required.Key);
+            if (inventory.Quantity < required.Value.Quantity)
             {
-                throw new BusinessException("Not enough stock to complete this order.");
+                throw new BusinessException($"Insufficient kitchen stock: {required.Value.Name} required {required.Value.Quantity:0.###} {required.Value.Unit}, available {inventory.Quantity:0.###} {required.Value.Unit}.");
             }
         }
+    }
+
+    private async Task<InventoryLocation> GetOrCreateLocationAsync(int branchId, string name, CancellationToken cancellationToken)
+    {
+        var location = await _context.InventoryLocations.FirstOrDefaultAsync(x => x.BranchId == branchId && x.Name == name, cancellationToken);
+        if (location is not null)
+        {
+            return location;
+        }
+
+        location = new InventoryLocation { BranchId = branchId, Name = name };
+        _context.InventoryLocations.Add(location);
+        await _context.SaveChangesAsync(cancellationToken);
+        return location;
     }
 
     private static void ApplyOrderFields(Order order, OrderType orderType, OrderStatus status, Customer? customer, CreateOrderDto dto)
@@ -558,4 +600,6 @@ public class OrderService : IOrderService
         };
 
     private sealed record PricedOrderItem(Product Product, int Quantity);
+
+    private sealed record RequiredInventoryItem(string Name, string Unit, decimal Quantity);
 }

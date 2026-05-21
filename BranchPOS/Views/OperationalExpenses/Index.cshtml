@@ -1,0 +1,35 @@
+@model IEnumerable<BranchPOS.Models.OperationalExpense>
+@{
+    ViewData["Title"] = "Operational Expenses";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Operational Expenses</h1>
+    <div>
+        <a class="btn btn-outline-secondary" asp-action="Categories">Categories</a>
+        <a class="btn btn-primary" asp-action="Create">New expense</a>
+    </div>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input name="from" value="@ViewBag.From" class="form-control" type="date" /></div>
+    <div class="col-md-3"><input name="to" value="@ViewBag.To" class="form-control" type="date" /></div>
+    <div class="col-md-2"><button class="btn btn-outline-primary" type="submit">Filter</button></div>
+</form>
+
+<table class="table table-striped">
+    <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Payment method</th><th>Description</th></tr></thead>
+    <tbody>
+    @foreach (var expense in Model)
+    {
+        <tr>
+            <td>@expense.ExpenseDate.ToString("yyyy-MM-dd")</td>
+            <td>@expense.ExpenseCategory?.Name</td>
+            <td>@expense.Amount.ToString("0.00")</td>
+            <td>@expense.PaymentMethodId</td>
+            <td>@expense.Description</td>
+        </tr>
+    }
+    </tbody>
+    <tfoot><tr><th colspan="2">Total</th><th>@Model.Sum(x => x.Amount).ToString("0.00")</th><th colspan="2"></th></tr></tfoot>
+</table>

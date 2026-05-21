@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace BranchPOS.Tests;
@@ -84,7 +85,8 @@ public class HardeningUnitTests
             new HttpContextAccessor { HttpContext = httpContext },
             DataProtectionProvider.Create("BranchPOS.Tests"),
             Options.Create(new PosOperationalOptions()),
-            new TestEnvironment());
+            new TestEnvironment(),
+            new MemoryCache(Options.Create(new MemoryCacheOptions())));
     }
 
     private sealed class TestEnvironment : IWebHostEnvironment

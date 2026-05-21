@@ -1,0 +1,20 @@
+@model BranchPOS.ViewModels.ProfitReportViewModel
+@{
+    ViewData["Title"] = "Profit Report";
+}
+
+<h1>Profit Report</h1>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input name="from" value="@Model.From?.ToString("yyyy-MM-dd")" class="form-control" type="date" /></div>
+    <div class="col-md-3"><input name="to" value="@Model.To?.ToString("yyyy-MM-dd")" class="form-control" type="date" /></div>
+    <div class="col-md-2"><button class="btn btn-outline-primary" type="submit">Filter</button></div>
+</form>
+
+<table class="table table-striped w-auto">
+    <tbody>
+        <tr><th>Sales Revenue</th><td>@Model.SalesRevenue.ToString("0.00")</td></tr>
+        <tr><th>Ingredient Cost</th><td>@Model.IngredientCost.ToString("0.00")</td></tr>
+        <tr><th>Operational Expenses</th><td>@Model.OperationalExpenses.ToString("0.00")</td></tr>
+        <tr><th>Net Profit</th><td>@Model.NetProfit.ToString("0.00")</td></tr>
+    </tbody>
+</table>

@@ -281,7 +281,7 @@ else if (isAdmin && Model is not null)
                         <thead>
                             <tr>
                                 <th>Branch</th>
-                                <th>Ingredient</th>
+                                <th>Inventory item</th>
                                 <th>Current</th>
                                 <th>Minimum</th>
                                 <th>Severity</th>
@@ -381,8 +381,8 @@ else
             @if (isStockManager)
             {
                 <a class="list-group-item list-group-item-action" asp-controller="Products" asp-action="Index">Products</a>
-                <a class="list-group-item list-group-item-action" asp-controller="Ingredients" asp-action="Index">Ingredients</a>
-                <a class="list-group-item list-group-item-action" asp-controller="Inventory" asp-action="Index">Inventory</a>
+                <a class="list-group-item list-group-item-action" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a>
+                <a class="list-group-item list-group-item-action" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a>
                 <a class="list-group-item list-group-item-action" asp-controller="Purchases" asp-action="Index">Purchases</a>
                 <a class="list-group-item list-group-item-action" asp-controller="Sessions" asp-action="Index">Manage stock session</a>
             }

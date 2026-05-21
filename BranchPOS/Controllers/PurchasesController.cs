@@ -89,8 +89,8 @@ public class PurchasesController : Controller
                 SupplierId = model.SupplierId,
                 InvoiceNumber = model.InvoiceNumber,
                 Items = model.Items
-                    .Where(x => x.IngredientId > 0 && x.Quantity > 0)
-                    .Select(x => new PurchaseItemDto { IngredientId = x.IngredientId, Quantity = x.Quantity, UnitCost = x.UnitCost })
+                    .Where(x => x.InventoryItemId > 0 && x.Quantity > 0)
+                    .Select(x => new PurchaseItemDto { InventoryItemId = x.InventoryItemId, Quantity = x.Quantity, UnitCost = x.UnitCost })
                     .ToList()
             };
             await _purchaseService.CreatePurchaseAsync(dto);
@@ -111,10 +111,10 @@ public class PurchasesController : Controller
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.SupplierId))
             .ToListAsync();
-        model.Ingredients = await _context.Ingredients
-            .Where(x => x.BranchId == branchId)
+        model.InventoryItems = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive)
             .OrderBy(x => x.Name)
-            .Select(x => new SelectListItem($"{x.Name} ({x.UnitType})", x.Id.ToString()))
+            .Select(x => new SelectListItem($"{x.Name} ({x.Unit})", x.Id.ToString()))
             .ToListAsync();
         return model;
     }

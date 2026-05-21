@@ -86,9 +86,9 @@ public class AdminDashboardService : IAdminDashboardService
             })
             .ToListAsync(cancellationToken);
 
-        var lowStockGroups = await _context.Inventories
+        var lowStockGroups = await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.CurrentQuantity <= x.Ingredient!.MinimumStockLevel)
+            .Where(x => x.Quantity <= x.InventoryItem!.ReorderLevel)
             .GroupBy(x => x.BranchId)
             .Select(x => new CountByBranchRow { BranchId = x.Key, Count = x.Count() })
             .ToListAsync(cancellationToken);
@@ -318,19 +318,19 @@ public class AdminDashboardService : IAdminDashboardService
 
     private async Task<List<InventoryRiskViewModel>> GetInventoryRisksAsync(CancellationToken cancellationToken)
     {
-        return await _context.Inventories
+        return await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.CurrentQuantity <= x.Ingredient!.MinimumStockLevel)
-            .OrderBy(x => x.Ingredient!.MinimumStockLevel == 0 ? 0 : x.CurrentQuantity / x.Ingredient.MinimumStockLevel)
-            .ThenBy(x => x.CurrentQuantity)
+            .Where(x => x.Quantity <= x.InventoryItem!.ReorderLevel)
+            .OrderBy(x => x.InventoryItem!.ReorderLevel == 0 ? 0 : x.Quantity / x.InventoryItem.ReorderLevel)
+            .ThenBy(x => x.Quantity)
             .Select(x => new InventoryRiskViewModel
             {
                 BranchName = x.Branch == null ? "" : x.Branch.Name,
-                IngredientName = x.Ingredient == null ? "" : x.Ingredient.Name,
-                UnitType = x.Ingredient == null ? "" : x.Ingredient.UnitType,
-                CurrentQuantity = x.CurrentQuantity,
-                MinimumStockLevel = x.Ingredient == null ? 0 : x.Ingredient.MinimumStockLevel,
-                Severity = x.CurrentQuantity <= 0 ? "Critical" : "Warning"
+                IngredientName = x.InventoryItem == null ? "" : $"{x.InventoryItem.Name} ({x.InventoryLocation!.Name})",
+                UnitType = x.InventoryItem == null ? "" : x.InventoryItem.Unit,
+                CurrentQuantity = x.Quantity,
+                MinimumStockLevel = x.InventoryItem == null ? 0 : x.InventoryItem.ReorderLevel,
+                Severity = x.Quantity <= 0 ? "Critical" : "Warning"
             })
             .Take(_options.MaxInventoryRisks)
             .ToListAsync(cancellationToken);

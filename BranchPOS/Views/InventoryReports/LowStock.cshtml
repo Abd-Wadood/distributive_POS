@@ -1,0 +1,20 @@
+@model IEnumerable<BranchPOS.Models.InventoryStock>
+@{
+    ViewData["Title"] = "Low Stock Alerts";
+}
+
+<h1>Low Stock Alerts</h1>
+<table class="table table-striped">
+    <thead><tr><th>Location</th><th>Item</th><th>Quantity</th><th>Reorder level</th></tr></thead>
+    <tbody>
+    @foreach (var stock in Model)
+    {
+        <tr>
+            <td>@stock.InventoryLocation?.Name</td>
+            <td>@stock.InventoryItem?.Name</td>
+            <td>@stock.Quantity.ToString("0.###") @stock.InventoryItem?.Unit</td>
+            <td>@stock.InventoryItem?.ReorderLevel.ToString("0.###")</td>
+        </tr>
+    }
+    </tbody>
+</table>

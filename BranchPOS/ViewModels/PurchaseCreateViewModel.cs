@@ -15,14 +15,14 @@ public class PurchaseCreateViewModel
 
     public List<SelectListItem> Suppliers { get; set; } = new();
 
-    public List<SelectListItem> Ingredients { get; set; } = new();
+    public List<SelectListItem> InventoryItems { get; set; } = new();
 
     public List<PurchaseItemInputModel> Items { get; set; } = [new(), new(), new(), new(), new()];
 }
 
 public class PurchaseItemInputModel
 {
-    public int IngredientId { get; set; }
+    public int InventoryItemId { get; set; }
 
     [Range(typeof(decimal), "0", "1000000", ErrorMessage = "Quantity must be greater than zero when an ingredient is selected.")]
     public decimal Quantity { get; set; }

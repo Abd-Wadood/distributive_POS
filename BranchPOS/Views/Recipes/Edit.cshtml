@@ -1,0 +1,31 @@
+@model BranchPOS.Models.Recipe
+@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    ViewData["Title"] = "Edit Recipe";
+    var products = (IEnumerable<SelectListItem>)ViewBag.Products;
+    var items = (IEnumerable<SelectListItem>)ViewBag.InventoryItems;
+}
+
+<h1>Edit Recipe</h1>
+<form method="post">
+    <input type="hidden" asp-for="Id" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="ProductId" class="form-label">Product</label>
+        <select asp-for="ProductId" asp-items="products" class="form-select"><option value="">Select product</option></select>
+    </div>
+    <table class="table">
+        <thead><tr><th>Inventory item</th><th>Quantity required per unit</th></tr></thead>
+        <tbody>
+        @for (var i = 0; i < Model.Ingredients.Count; i++)
+        {
+            <tr>
+                <td><select asp-for="Ingredients[i].InventoryItemId" asp-items="items" class="form-select"><option value="">Select item</option></select></td>
+                <td><input asp-for="Ingredients[i].QuantityRequired" class="form-control" type="number" step="0.001" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <button class="btn btn-primary" type="submit">Save recipe</button>
+    <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+</form>

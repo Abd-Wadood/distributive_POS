@@ -1,0 +1,14 @@
+@{
+    ViewData["Title"] = "Inventory Reports";
+}
+
+<h1>Inventory Reports</h1>
+<div class="list-group">
+    <a class="list-group-item list-group-item-action" asp-action="StockRoom">Stock Room Inventory</a>
+    <a class="list-group-item list-group-item-action" asp-action="Kitchen">Kitchen Inventory</a>
+    <a class="list-group-item list-group-item-action" asp-action="LowStock">Low Stock Alerts</a>
+    <a class="list-group-item list-group-item-action" asp-action="Movements">Inventory Movement History</a>
+    <a class="list-group-item list-group-item-action" asp-controller="KitchenRequests" asp-action="Index">Kitchen Request History</a>
+    <a class="list-group-item list-group-item-action" asp-controller="OperationalExpenses" asp-action="Index">Operational Expense Report</a>
+    <a class="list-group-item list-group-item-action" asp-action="Profit">Profit Report</a>
+</div>

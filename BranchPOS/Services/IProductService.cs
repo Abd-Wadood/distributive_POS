@@ -8,7 +8,7 @@ public interface IProductService
 
     Task<Product?> GetProductAsync(int id, CancellationToken cancellationToken = default);
 
-    Task CreateProductAsync(Product product, Dictionary<int, decimal> ingredientQuantities, CancellationToken cancellationToken = default);
+    Task CreateProductAsync(Product product, Dictionary<int, decimal> recipeItemQuantities, CancellationToken cancellationToken = default);
 
-    Task UpdateProductAsync(Product product, Dictionary<int, decimal> ingredientQuantities, CancellationToken cancellationToken = default);
+    Task UpdateProductAsync(Product product, Dictionary<int, decimal> recipeItemQuantities, CancellationToken cancellationToken = default);
 }

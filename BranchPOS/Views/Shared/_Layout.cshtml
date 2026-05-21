@@ -62,8 +62,15 @@
                             @if (isStockManager)
                             {
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Products" asp-action="Index">Products</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Ingredients" asp-action="Index">Ingredients</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Inventory" asp-action="Index">Inventory</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Kitchen">Kitchen Inventory</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="KitchenRequests" asp-action="Index">Kitchen Requests</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Recipes" asp-action="Index">Recipe Management</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Movements">Inventory Movements</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="OperationalExpenses" asp-action="Index">Operational Expenses</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Index">Inventory Reports</a></li>
+                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Profit">Profit Report</a></li>
                                 <li class="nav-item"><a class="nav-link text-dark" asp-controller="Purchases" asp-action="Index">Purchases</a></li>
                             }
                             @if (isCashier)

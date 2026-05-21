@@ -19,19 +19,19 @@
     </div>
     <h3>Recipe ingredients</h3>
     <table class="table">
-        <thead><tr><th>Ingredient</th><th>Unit</th><th>Quantity required per product</th></tr></thead>
+        <thead><tr><th>Inventory item</th><th>Unit</th><th>Quantity required per product</th></tr></thead>
         <tbody>
-        @for (var i = 0; i < Model.Ingredients.Count; i++)
+        @for (var i = 0; i < Model.RecipeItems.Count; i++)
         {
             <tr>
                 <td>
-                    @Model.Ingredients[i].Name
-                    <input asp-for="Ingredients[i].IngredientId" type="hidden" />
-                    <input asp-for="Ingredients[i].Name" type="hidden" />
-                    <input asp-for="Ingredients[i].UnitType" type="hidden" />
+                    @Model.RecipeItems[i].Name
+                    <input asp-for="RecipeItems[i].InventoryItemId" type="hidden" />
+                    <input asp-for="RecipeItems[i].Name" type="hidden" />
+                    <input asp-for="RecipeItems[i].Unit" type="hidden" />
                 </td>
-                <td>@Model.Ingredients[i].UnitType</td>
-                <td><input asp-for="Ingredients[i].QuantityRequired" class="form-control" /></td>
+                <td>@Model.RecipeItems[i].Unit</td>
+                <td><input asp-for="RecipeItems[i].QuantityRequired" class="form-control" /></td>
             </tr>
         }
         </tbody>

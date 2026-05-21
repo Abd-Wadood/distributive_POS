@@ -18,12 +18,16 @@
         </div>
     </div>
     <table class="table">
-        <thead><tr><th>Ingredient</th><th>Quantity</th><th>Unit cost</th></tr></thead>
+        <thead><tr><th>Raw inventory item</th><th>Quantity</th><th>Unit cost</th></tr></thead>
         <tbody>
         @for (var i = 0; i < Model.Items.Count; i++)
         {
             <tr>
-                <td><select asp-for="Items[i].IngredientId" asp-items="Model.Ingredients" class="form-select"></select></td>
+                <td>
+                    <select asp-for="Items[i].InventoryItemId" asp-items="Model.InventoryItems" class="form-select">
+                        <option value="">Select item</option>
+                    </select>
+                </td>
                 <td><input asp-for="Items[i].Quantity" class="form-control" /></td>
                 <td><input asp-for="Items[i].UnitCost" class="form-control" /></td>
             </tr>

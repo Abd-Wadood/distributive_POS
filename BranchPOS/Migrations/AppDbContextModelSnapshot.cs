@@ -359,6 +359,113 @@ namespace BranchPOS.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("BranchPOS.Models.ExpenseCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExpenseCategories_BranchId_Name");
+
+                    b.ToTable("ExpenseCategories");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Rent"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Electricity"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Gas"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Salaries"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Internet"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Repair"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Cleaning"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Transport"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Miscellaneous"
+                        });
+                });
+
             modelBuilder.Entity("BranchPOS.Models.IdempotencyRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -444,7 +551,7 @@ namespace BranchPOS.Migrations
                     b.ToTable("IdempotencyRecords");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.Ingredient", b =>
+            modelBuilder.Entity("BranchPOS.Models.InventoryItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -458,16 +565,21 @@ namespace BranchPOS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<decimal>("MinimumStockLevel")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
-                    b.Property<string>("UnitType")
+                    b.Property<decimal>("ReorderLevel")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("Unit")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
@@ -477,58 +589,492 @@ namespace BranchPOS.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BranchId");
+                    b.HasIndex("BranchId", "IsActive")
+                        .HasDatabaseName("IX_InventoryItems_BranchId_IsActive");
 
-                    b.HasIndex("BranchId", "Name")
-                        .IsUnique();
+                    b.HasIndex("BranchId", "Name", "Unit")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryItems_BranchId_Name_Unit");
 
-                    b.ToTable("Ingredients");
-                });
+                    b.ToTable("InventoryItems");
 
-            modelBuilder.Entity("BranchPOS.Models.Inventory", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BranchId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("CurrentQuantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<int>("IngredientId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("IngredientId")
-                        .IsUnique();
-
-                    b.HasIndex("BranchId", "CurrentQuantity")
-                        .HasDatabaseName("IX_Inventories_BranchId_CurrentQuantity");
-
-                    b.HasIndex("BranchId", "IngredientId")
-                        .IsUnique();
-
-                    b.ToTable("Inventories", t =>
+                    b.HasData(
+                        new
                         {
-                            t.HasCheckConstraint("CK_Inventories_CurrentQuantity_NonNegative", "\"CurrentQuantity\" >= 0");
+                            Id = 1,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Coca-Cola",
+                            ReorderLevel = 10m,
+                            Unit = "0.5L Bottle",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Coca-Cola",
+                            ReorderLevel = 10m,
+                            Unit = "1L Bottle",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 3,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Coca-Cola",
+                            ReorderLevel = 10m,
+                            Unit = "1.5L Bottle",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 4,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Coca-Cola",
+                            ReorderLevel = 10m,
+                            Unit = "300ML Bottle",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 5,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Aluminium Foil",
+                            ReorderLevel = 10m,
+                            Unit = "Roll",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 6,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "BBQ Sauce",
+                            ReorderLevel = 10m,
+                            Unit = "Bottle",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 7,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Black Olives",
+                            ReorderLevel = 10m,
+                            Unit = "Tin",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 8,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Cheese",
+                            ReorderLevel = 10m,
+                            Unit = "Kg",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 9,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Chicken Patty",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 10,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Cling Film",
+                            ReorderLevel = 10m,
+                            Unit = "Roll",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 11,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Cooking Oil",
+                            ReorderLevel = 10m,
+                            Unit = "Liter",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 12,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Eka",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 13,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "F1 Packing",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 14,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "F2 Packing",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 15,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Food Bag Large",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 16,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Forks",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 17,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Fries",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 18,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Fry Oil",
+                            ReorderLevel = 10m,
+                            Unit = "Tin",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 19,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Gas Cylinder",
+                            ReorderLevel = 10m,
+                            Unit = "Refill",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 20,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Ice Sugar",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 21,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Imli Sauce",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 22,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Jalapeño",
+                            ReorderLevel = 10m,
+                            Unit = "Jar",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 23,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Mayonnaise",
+                            ReorderLevel = 10m,
+                            Unit = "Liter",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 24,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Medium Food Bags",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 25,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Mushrooms",
+                            ReorderLevel = 10m,
+                            Unit = "Tin",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 26,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Mustard Sauce",
+                            ReorderLevel = 10m,
+                            Unit = "Liter",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 27,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Nido",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 28,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Nuggets",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 29,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Paratha",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 30,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Pepperoni",
+                            ReorderLevel = 10m,
+                            Unit = "Kg",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 31,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Peri Peri Sauce",
+                            ReorderLevel = 10m,
+                            Unit = "Bottle",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 32,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Pizza Sauce",
+                            ReorderLevel = 10m,
+                            Unit = "Liter",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 33,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Pizza Table",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 34,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Printer Rolls",
+                            ReorderLevel = 10m,
+                            Unit = "Roll",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 35,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Sandwich Packing",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 36,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Sausages",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 37,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Sweet Corn",
+                            ReorderLevel = 10m,
+                            Unit = "Tin",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 38,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Tomato Chilly Sachet",
+                            ReorderLevel = 10m,
+                            Unit = "Piece",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 39,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Tape Roll",
+                            ReorderLevel = 10m,
+                            Unit = "Roll",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 40,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Tikka Masala",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 41,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Tissue Roll",
+                            ReorderLevel = 10m,
+                            Unit = "Roll",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 42,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Yeast",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 43,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Zinger Recipe Masala",
+                            ReorderLevel = 10m,
+                            Unit = "Packet",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.InventoryTransaction", b =>
+            modelBuilder.Entity("BranchPOS.Models.InventoryLocation", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -542,72 +1088,321 @@ namespace BranchPOS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("IdempotencyKey")
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
-                    b.Property<int>("IngredientId")
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId", "IsActive")
+                        .HasDatabaseName("IX_InventoryLocations_BranchId_IsActive");
+
+                    b.HasIndex("BranchId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryLocations_BranchId_Name");
+
+                    b.ToTable("InventoryLocations");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Stock Room"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            BranchId = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            Name = "Kitchen"
+                        });
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.InventoryMovement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
-                    b.Property<bool>("IsSynced")
-                        .HasColumnType("boolean");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("PerformedByUserId")
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid");
+                    b.Property<int?>("FromLocationId")
+                        .HasColumnType("integer");
 
-                    b.Property<decimal>("QuantityChanged")
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MovementType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("Quantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
                     b.Property<int?>("ReferenceId")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("SyncedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
-                    b.Property<string>("TerminalCode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<int>("TerminalId")
+                    b.Property<int?>("ToLocationId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("TransactionType")
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_InventoryMovements_CreatedAt");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("FromLocationId");
+
+                    b.HasIndex("InventoryItemId")
+                        .HasDatabaseName("IX_InventoryMovements_InventoryItemId");
+
+                    b.HasIndex("MovementType")
+                        .HasDatabaseName("IX_InventoryMovements_MovementType");
+
+                    b.HasIndex("ToLocationId");
+
+                    b.HasIndex("ReferenceType", "ReferenceId")
+                        .HasDatabaseName("IX_InventoryMovements_Reference");
+
+                    b.ToTable("InventoryMovements");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.InventoryStock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AverageUnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InventoryLocationId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("InventoryLocationId");
+
+                    b.HasIndex("InventoryItemId", "InventoryLocationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryStocks_Item_Location");
+
+                    b.ToTable("InventoryStocks", t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryStocks_Quantity_NonNegative", "\"Quantity\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.KitchenRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("RequestNumber")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
-                    b.Property<int?>("UserSessionId")
+                    b.Property<string>("RequestedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_KitchenRequests_CreatedAt");
+
+                    b.HasIndex("RequestNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_KitchenRequests_RequestNumber");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_KitchenRequests_Status");
+
+                    b.ToTable("KitchenRequests");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.KitchenRequestDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("ApprovedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<decimal?>("DispatchedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("KitchenRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<decimal>("RequestedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("KitchenRequestId");
+
+                    b.ToTable("KitchenRequestDetails");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.OperationalExpense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("ExpenseCategoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("PaymentMethodId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("IdempotencyKey")
-                        .IsUnique()
-                        .HasDatabaseName("UX_InventoryTransactions_IdempotencyKey")
-                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+                    b.HasIndex("CreatedByUserId");
 
-                    b.HasIndex("PerformedByUserId");
+                    b.HasIndex("ExpenseCategoryId");
 
-                    b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_InventoryTransactions_PublicId");
+                    b.HasIndex("ExpenseDate")
+                        .HasDatabaseName("IX_OperationalExpenses_ExpenseDate");
 
-                    b.HasIndex("TerminalId");
-
-                    b.HasIndex("UserSessionId");
-
-                    b.HasIndex("IngredientId", "CreatedAt");
-
-                    b.HasIndex("TransactionType", "ReferenceId");
-
-                    b.ToTable("InventoryTransactions");
+                    b.ToTable("OperationalExpenses");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Order", b =>
@@ -830,40 +1625,6 @@ namespace BranchPOS.Migrations
                     b.ToTable("Products");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.ProductIngredient", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("IngredientId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("QuantityRequired")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IngredientId");
-
-                    b.HasIndex("ProductId", "IngredientId")
-                        .IsUnique();
-
-                    b.ToTable("ProductIngredients");
-                });
-
             modelBuilder.Entity("BranchPOS.Models.Purchase", b =>
                 {
                     b.Property<int>("Id")
@@ -958,7 +1719,7 @@ namespace BranchPOS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("IngredientId")
+                    b.Property<int?>("InventoryItemId")
                         .HasColumnType("integer");
 
                     b.Property<int>("PurchaseId")
@@ -979,11 +1740,77 @@ namespace BranchPOS.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("IngredientId");
+                    b.HasIndex("InventoryItemId");
 
-                    b.HasIndex("PurchaseId", "IngredientId");
+                    b.HasIndex("PurchaseId", "InventoryItemId");
 
                     b.ToTable("PurchaseItems");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.Recipe", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Recipes_ProductId_Active")
+                        .HasFilter("\"IsActive\" = TRUE");
+
+                    b.ToTable("Recipes");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.RecipeIngredient", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("QuantityRequired")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<int>("RecipeId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("RecipeId", "InventoryItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_RecipeIngredients_RecipeId_Item");
+
+                    b.ToTable("RecipeIngredients");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Supplier", b =>
@@ -1496,6 +2323,17 @@ namespace BranchPOS.Migrations
                     b.Navigation("Branch");
                 });
 
+            modelBuilder.Entity("BranchPOS.Models.ExpenseCategory", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+                });
+
             modelBuilder.Entity("BranchPOS.Models.IdempotencyRecord", b =>
                 {
                     b.HasOne("BranchPOS.Models.Branch", "Branch")
@@ -1520,7 +2358,7 @@ namespace BranchPOS.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.Ingredient", b =>
+            modelBuilder.Entity("BranchPOS.Models.InventoryItem", b =>
                 {
                     b.HasOne("BranchPOS.Models.Branch", "Branch")
                         .WithMany()
@@ -1531,7 +2369,7 @@ namespace BranchPOS.Migrations
                     b.Navigation("Branch");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.Inventory", b =>
+            modelBuilder.Entity("BranchPOS.Models.InventoryLocation", b =>
                 {
                     b.HasOne("BranchPOS.Models.Branch", "Branch")
                         .WithMany()
@@ -1539,18 +2377,121 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BranchPOS.Models.Ingredient", "Ingredient")
-                        .WithOne("Inventory")
-                        .HasForeignKey("BranchPOS.Models.Inventory", "IngredientId")
+                    b.Navigation("Branch");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.InventoryMovement", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "FromLocation")
+                        .WithMany()
+                        .HasForeignKey("FromLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany("Movements")
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "ToLocation")
+                        .WithMany()
+                        .HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("FromLocation");
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("ToLocation");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.InventoryStock", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany("Stocks")
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "InventoryLocation")
+                        .WithMany()
+                        .HasForeignKey("InventoryLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("InventoryLocation");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.KitchenRequest", b =>
+                {
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("RequestedByUser");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.KitchenRequestDetail", b =>
+                {
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.KitchenRequest", "KitchenRequest")
+                        .WithMany("Details")
+                        .HasForeignKey("KitchenRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Branch");
+                    b.Navigation("InventoryItem");
 
-                    b.Navigation("Ingredient");
+                    b.Navigation("KitchenRequest");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.InventoryTransaction", b =>
+            modelBuilder.Entity("BranchPOS.Models.OperationalExpense", b =>
                 {
                     b.HasOne("BranchPOS.Models.Branch", "Branch")
                         .WithMany()
@@ -1558,37 +2499,22 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BranchPOS.Models.Ingredient", "Ingredient")
-                        .WithMany("InventoryTransactions")
-                        .HasForeignKey("IngredientId")
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.ExpenseCategory", "ExpenseCategory")
+                        .WithMany("Expenses")
+                        .HasForeignKey("ExpenseCategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("BranchPOS.Models.ApplicationUser", "PerformedByUser")
-                        .WithMany()
-                        .HasForeignKey("PerformedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("BranchPOS.Models.Terminal", "Terminal")
-                        .WithMany()
-                        .HasForeignKey("TerminalId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BranchPOS.Models.UserSession", "UserSession")
-                        .WithMany()
-                        .HasForeignKey("UserSessionId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Branch");
 
-                    b.Navigation("Ingredient");
+                    b.Navigation("CreatedByUser");
 
-                    b.Navigation("PerformedByUser");
-
-                    b.Navigation("Terminal");
-
-                    b.Navigation("UserSession");
+                    b.Navigation("ExpenseCategory");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Order", b =>
@@ -1678,25 +2604,6 @@ namespace BranchPOS.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.ProductIngredient", b =>
-                {
-                    b.HasOne("BranchPOS.Models.Ingredient", "Ingredient")
-                        .WithMany("ProductIngredients")
-                        .HasForeignKey("IngredientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BranchPOS.Models.Product", "Product")
-                        .WithMany("ProductIngredients")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Ingredient");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("BranchPOS.Models.Purchase", b =>
                 {
                     b.HasOne("BranchPOS.Models.Branch", "Branch")
@@ -1746,11 +2653,10 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BranchPOS.Models.Ingredient", "Ingredient")
-                        .WithMany("PurchaseItems")
-                        .HasForeignKey("IngredientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BranchPOS.Models.Purchase", "Purchase")
                         .WithMany("Items")
@@ -1760,9 +2666,47 @@ namespace BranchPOS.Migrations
 
                     b.Navigation("Branch");
 
-                    b.Navigation("Ingredient");
+                    b.Navigation("InventoryItem");
 
                     b.Navigation("Purchase");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.Recipe", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.Product", "Product")
+                        .WithMany("Recipes")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.RecipeIngredient", b =>
+                {
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany("RecipeIngredients")
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.Recipe", "Recipe")
+                        .WithMany("Ingredients")
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("Recipe");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Terminal", b =>
@@ -1929,15 +2873,23 @@ namespace BranchPOS.Migrations
                     b.Navigation("Orders");
                 });
 
-            modelBuilder.Entity("BranchPOS.Models.Ingredient", b =>
+            modelBuilder.Entity("BranchPOS.Models.ExpenseCategory", b =>
                 {
-                    b.Navigation("Inventory");
+                    b.Navigation("Expenses");
+                });
 
-                    b.Navigation("InventoryTransactions");
+            modelBuilder.Entity("BranchPOS.Models.InventoryItem", b =>
+                {
+                    b.Navigation("Movements");
 
-                    b.Navigation("ProductIngredients");
+                    b.Navigation("RecipeIngredients");
 
-                    b.Navigation("PurchaseItems");
+                    b.Navigation("Stocks");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.KitchenRequest", b =>
+                {
+                    b.Navigation("Details");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Order", b =>
@@ -1949,12 +2901,17 @@ namespace BranchPOS.Migrations
                 {
                     b.Navigation("OrderItems");
 
-                    b.Navigation("ProductIngredients");
+                    b.Navigation("Recipes");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Purchase", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.Recipe", b =>
+                {
+                    b.Navigation("Ingredients");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Supplier", b =>

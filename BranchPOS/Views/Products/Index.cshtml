@@ -12,7 +12,7 @@
 </div>
 
 <table class="table table-striped">
-    <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Ingredients</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Recipe</th><th></th></tr></thead>
     <tbody>
     @foreach (var product in Model)
     {
@@ -20,7 +20,7 @@
             <td>@product.Name</td>
             <td>@product.Category?.Name</td>
             <td>@product.Price.ToString("0.00")</td>
-            <td>@string.Join(", ", product.ProductIngredients.Select(x => $"{x.Ingredient?.Name}: {x.QuantityRequired:0.###}"))</td>
+            <td>@string.Join(", ", product.Recipes.FirstOrDefault(x => x.IsActive)?.Ingredients.Select(x => $"{x.InventoryItem?.Name} ({x.InventoryItem?.Unit}): {x.QuantityRequired:0.###}") ?? [])</td>
             <td>
                 @if (User.IsInRole("Admin") || User.IsInRole("StockManager"))
                 {

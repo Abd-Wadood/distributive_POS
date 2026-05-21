@@ -196,7 +196,7 @@ public class UsersController : Controller
             await _context.Orders.AnyAsync(x => x.CashierId == id) ||
             await _context.UserSessions.AnyAsync(x => x.UserId == id) ||
             await _context.Purchases.AnyAsync(x => x.PerformedByUserId == id) ||
-            await _context.InventoryTransactions.AnyAsync(x => x.PerformedByUserId == id);
+            await _context.InventoryMovements.AnyAsync(x => x.CreatedByUserId == id);
 
         if (hasHistory)
         {

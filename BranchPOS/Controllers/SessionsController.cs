@@ -121,6 +121,9 @@ public class SessionsController : Controller
         }
     }
 
+    [HttpGet, Authorize(Roles = "Cashier,StockManager")]
+    public IActionResult End() => RedirectToAction(nameof(Index));
+
     [HttpGet, Authorize(Roles = "Cashier,StockManager,Admin")]
     public async Task<IActionResult> Close(int sessionId)
     {

@@ -19,25 +19,25 @@ public class ProductEditViewModel
 
     public List<SelectListItem> Categories { get; set; } = new();
 
-    public List<IngredientQuantityViewModel> Ingredients { get; set; } = new();
+    public List<RecipeItemQuantityViewModel> RecipeItems { get; set; } = new();
 }
 
-public class IngredientQuantityViewModel
+public class RecipeItemQuantityViewModel
 {
-    public int IngredientId { get; set; }
+    public int InventoryItemId { get; set; }
 
     public string Name { get; set; } = string.Empty;
 
-    public string UnitType { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
 
     public decimal QuantityRequired { get; set; }
 
-    public static IngredientQuantityViewModel FromIngredient(Ingredient ingredient, decimal quantity = 0) =>
+    public static RecipeItemQuantityViewModel FromInventoryItem(InventoryItem item, decimal quantity = 0) =>
         new()
         {
-            IngredientId = ingredient.Id,
-            Name = ingredient.Name,
-            UnitType = ingredient.UnitType,
+            InventoryItemId = item.Id,
+            Name = item.Name,
+            Unit = item.Unit,
             QuantityRequired = quantity
         };
 }
