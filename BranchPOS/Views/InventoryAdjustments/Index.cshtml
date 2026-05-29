@@ -1,0 +1,96 @@
+@model IEnumerable<BranchPOS.DTOs.InventoryAdjustmentResultDto>
+@using BranchPOS.Models
+@{
+    ViewData["Title"] = "Inventory Adjustments";
+    var canReview = ViewBag.CanReview == true;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Inventory Adjustments</h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-action="WastageSummary">Wastage summary</a>
+        <a class="btn btn-primary" asp-action="Create">New adjustment</a>
+    </div>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-2">
+        <select name="locationType" class="form-select" asp-items="Html.GetEnumSelectList<InventoryLocationType>()">
+            <option value="">All locations</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="adjustmentType" class="form-select" asp-items="Html.GetEnumSelectList<InventoryAdjustmentType>()">
+            <option value="">All types</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select name="status" class="form-select" asp-items="Html.GetEnumSelectList<InventoryAdjustmentStatus>()">
+            <option value="">All statuses</option>
+        </select>
+    </div>
+    <div class="col-md-2"><input name="from" value="@ViewBag.From" class="form-control" type="date" /></div>
+    <div class="col-md-2"><input name="to" value="@ViewBag.To" class="form-control" type="date" /></div>
+    <div class="col-md-2"><button class="btn btn-outline-primary" type="submit">Filter</button></div>
+</form>
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Item</th>
+            <th>Location</th>
+            <th>Type</th>
+            <th>Quantity</th>
+            <th>Cost</th>
+            <th>Status</th>
+            <th>Created By</th>
+            <th>Approved / Rejected By</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var adjustment in Model)
+    {
+        <tr>
+            <td>@adjustment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+            <td>@adjustment.InventoryItemName</td>
+            <td>@adjustment.LocationType</td>
+            <td>@adjustment.AdjustmentType</td>
+            <td>
+                @(adjustment.DisplayQuantity?.ToString("0.###") ?? adjustment.QuantityBaseUnit.ToString("0.###"))
+                @(adjustment.DisplayUnitName ?? "base")
+                <div class="small text-muted">@adjustment.QuantityBaseUnit.ToString("0.###") base</div>
+            </td>
+            <td>@CurrencyFormatter.Format(adjustment.TotalCost)</td>
+            <td>@adjustment.Status</td>
+            <td>@adjustment.CreatedByUserName</td>
+            <td>
+                @if (adjustment.Status == InventoryAdjustmentStatus.Approved)
+                {
+                    <span>@adjustment.ApprovedByUserName</span>
+                }
+                else if (adjustment.Status == InventoryAdjustmentStatus.Rejected)
+                {
+                    <span>@adjustment.RejectedByUserName</span>
+                }
+            </td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@adjustment.Id">Details</a>
+                @if (canReview && adjustment.Status == InventoryAdjustmentStatus.Pending)
+                {
+                    <form class="d-inline" asp-action="Approve" method="post">
+                        <input type="hidden" name="AdjustmentId" value="@adjustment.Id" />
+                        <button class="btn btn-sm btn-success" type="submit">Approve</button>
+                    </form>
+                    <form class="d-inline" asp-action="Reject" method="post">
+                        <input type="hidden" name="AdjustmentId" value="@adjustment.Id" />
+                        <input type="hidden" name="RejectionReason" value="Rejected from list." />
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

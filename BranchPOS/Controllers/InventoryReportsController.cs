@@ -23,9 +23,17 @@ public class InventoryReportsController : Controller
 
     public IActionResult Index() => View();
 
-    public async Task<IActionResult> StockRoom() => View("Stock", await _restaurantInventoryService.GetStockAsync("Stock Room"));
+    public async Task<IActionResult> StockRoom()
+    {
+        await PopulatePreparedRecipeOutputQuantitiesAsync();
+        return View("Stock", await _restaurantInventoryService.GetStockAsync("Stock Room"));
+    }
 
-    public async Task<IActionResult> Kitchen() => View("Stock", await _restaurantInventoryService.GetStockAsync("Kitchen"));
+    public async Task<IActionResult> Kitchen()
+    {
+        await PopulatePreparedRecipeOutputQuantitiesAsync();
+        return View("Stock", await _restaurantInventoryService.GetStockAsync("Kitchen"));
+    }
 
     public async Task<IActionResult> LowStock()
     {
@@ -33,7 +41,7 @@ public class InventoryReportsController : Controller
         var stocks = await _context.InventoryStocks
             .Include(x => x.InventoryItem)
             .Include(x => x.InventoryLocation)
-            .Where(x => x.BranchId == branchId && x.Quantity <= x.InventoryItem!.ReorderLevel)
+            .Where(x => x.BranchId == branchId && x.QuantityBase <= x.InventoryItem!.ReorderLevel)
             .OrderBy(x => x.InventoryLocation!.Name)
             .ThenBy(x => x.InventoryItem!.Name)
             .ToListAsync();
@@ -58,4 +66,14 @@ public class InventoryReportsController : Controller
     public async Task<IActionResult> KitchenRequests() => RedirectToAction("Index", "KitchenRequests");
 
     public async Task<IActionResult> Profit(DateTime? from, DateTime? to) => View(await _restaurantInventoryService.BuildProfitReportAsync(from, to));
+
+    private async Task PopulatePreparedRecipeOutputQuantitiesAsync()
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        ViewBag.PreparedRecipeOutputQuantities = await _context.PreparationRecipes
+            .AsNoTracking()
+            .Where(x => x.BranchId == branchId && x.IsActive && x.OutputQuantityBase > 0)
+            .GroupBy(x => x.OutputInventoryItemId)
+            .ToDictionaryAsync(x => x.Key, x => x.First().OutputQuantityBase);
+    }
 }

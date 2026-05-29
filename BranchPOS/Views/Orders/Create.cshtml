@@ -104,7 +104,7 @@
 
 @section Scripts {
 <script>
-const products = @Html.Raw(productsJson);
+let products = @Html.Raw(productsJson);
 const draftOrders = @Html.Raw(draftsJson);
 const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
@@ -147,7 +147,7 @@ function activeOrder() {
 }
 
 function money(value) {
-    return Number(value || 0).toFixed(2);
+    return `Rs. ${Number(value || 0).toFixed(2)}`;
 }
 
 function showMessage(message, type = 'danger') {
@@ -343,6 +343,21 @@ async function postJson(url, payload) {
     return data;
 }
 
+async function refreshProducts() {
+    try {
+        const response = await fetch('/Orders/Products', {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store'
+        });
+        if (!response.ok) return;
+        products = await response.json();
+        renderProducts();
+        renderCart();
+    } catch {
+        // Availability refresh is best-effort; finalization still validates stock server-side.
+    }
+}
+
 document.addEventListener('click', async event => {
     const card = event.target.closest('.product-card');
     const clickedControl = event.target.closest('button, input, select, textarea, a');
@@ -453,11 +468,17 @@ document.getElementById('finalizeOrderBtn').addEventListener('click', async () =
         button.disabled = true;
         button.textContent = 'Processing...';
         const data = await postJson('/Orders/Finalize', buildPayload());
-        window.location.href = data.receiptUrl;
+        if (data.notification) {
+            showMessage(data.notification, 'warning');
+            window.setTimeout(() => window.location.href = data.receiptUrl, 900);
+        } else {
+            window.location.href = data.receiptUrl;
+        }
     } catch (error) {
         button.disabled = false;
         button.textContent = 'Finalize sale';
         showMessage(error.message);
+        await refreshProducts();
     }
 });
 
@@ -470,5 +491,6 @@ document.getElementById('finalizeOrderBtn').addEventListener('click', async () =
 draftOrders.forEach(startNewOrder);
 if (orders.length === 0) startNewOrder();
 renderAll();
+window.setInterval(refreshProducts, 15000);
 </script>
 }

@@ -207,4 +207,4 @@ C:\Users\wadoo\OneDrive\Desktop\Offline POS\.verify-build\BranchPOS\BranchPOS.de
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\.verify-build\BranchPOS\BranchPOS.runtimeconfig.json
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\.verify-build\BranchPOS\BranchPOS.dll
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\.verify-build\BranchPOS\BranchPOS.pdb
-C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\obj\Debug\net10.0\compressed\xdk086umr8-{0}-0k50eri6zs-0k50eri6zs.gz
+C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\obj\Debug\net10.0\compressed\xdk086umr8-{0}-7qnf1ozrgw-7qnf1ozrgw.gz

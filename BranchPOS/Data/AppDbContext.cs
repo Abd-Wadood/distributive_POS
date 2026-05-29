@@ -18,10 +18,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<InventoryStock> InventoryStocks => Set<InventoryStock>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
+    public DbSet<InventoryAdjustment> InventoryAdjustments => Set<InventoryAdjustment>();
     public DbSet<KitchenRequest> KitchenRequests => Set<KitchenRequest>();
     public DbSet<KitchenRequestDetail> KitchenRequestDetails => Set<KitchenRequestDetail>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
+    public DbSet<PreparationRecipe> PreparationRecipes => Set<PreparationRecipe>();
+    public DbSet<PreparationRecipeIngredient> PreparationRecipeIngredients => Set<PreparationRecipeIngredient>();
+    public DbSet<PreparationBatch> PreparationBatches => Set<PreparationBatch>();
     public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
     public DbSet<OperationalExpense> OperationalExpenses => Set<OperationalExpense>();
     public DbSet<Product> Products => Set<Product>();
@@ -99,12 +103,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<InventoryItem>(entity =>
         {
-            entity.HasIndex(x => new { x.BranchId, x.Name, x.Unit }).IsUnique().HasDatabaseName("UX_InventoryItems_BranchId_Name_Unit");
+            entity.HasIndex(x => new { x.BranchId, x.Name, x.BaseUnit }).IsUnique().HasDatabaseName("UX_InventoryItems_BranchId_Name_BaseUnit");
             entity.HasIndex(x => new { x.BranchId, x.IsActive }).HasDatabaseName("IX_InventoryItems_BranchId_IsActive");
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
-            entity.Property(x => x.Unit).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.BaseUnit).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.PurchaseUnitName).HasMaxLength(80);
+            entity.Property(x => x.DefaultConversionFactorToBase).HasPrecision(18, 3);
             entity.Property(x => x.ReorderLevel).HasPrecision(18, 3);
+            entity.Property(x => x.MinimumKitchenLevel).HasPrecision(18, 3);
             entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.Property(x => x.IsPreparedItem).HasDefaultValue(false);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -113,12 +121,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<InventoryStock>(entity =>
         {
-            entity.ToTable(t => t.HasCheckConstraint("CK_InventoryStocks_Quantity_NonNegative", "\"Quantity\" >= 0"));
+            entity.ToTable(t => t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_NonNegative", "\"QuantityBase\" >= 0"));
             entity.Property<uint>("xmin").IsRowVersion();
             entity.HasIndex(x => new { x.InventoryItemId, x.InventoryLocationId }).IsUnique().HasDatabaseName("UX_InventoryStocks_Item_Location");
             entity.HasIndex(x => x.BranchId);
-            entity.Property(x => x.Quantity).HasPrecision(18, 3);
-            entity.Property(x => x.AverageUnitCost).HasPrecision(18, 4);
+            entity.Property(x => x.QuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.AverageUnitCostBase).HasPrecision(18, 6);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -135,15 +143,25 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<InventoryMovement>(entity =>
         {
+            entity.ToTable(t => t.HasCheckConstraint("CK_InventoryMovements_QuantityBase_Positive", "\"QuantityBase\" > 0"));
             entity.HasIndex(x => x.InventoryItemId).HasDatabaseName("IX_InventoryMovements_InventoryItemId");
             entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_InventoryMovements_CreatedAt");
             entity.HasIndex(x => x.MovementType).HasDatabaseName("IX_InventoryMovements_MovementType");
             entity.HasIndex(x => new { x.ReferenceType, x.ReferenceId }).HasDatabaseName("IX_InventoryMovements_Reference");
-            entity.Property(x => x.Quantity).HasPrecision(18, 3);
-            entity.Property(x => x.UnitCost).HasPrecision(18, 4);
+            entity.HasIndex(x => x.KitchenRequestDetailId).HasDatabaseName("IX_InventoryMovements_KitchenRequestDetailId");
+            entity.HasIndex(x => new { x.ReferenceType, x.ReferenceId, x.MovementType, x.InventoryItemId, x.FromLocationId, x.ToLocationId, x.IdempotencyKey })
+                .IsUnique()
+                .HasFilter("\"ReferenceType\" IS NOT NULL AND \"ReferenceId\" IS NOT NULL AND \"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_InventoryMovements_DuplicateProtection");
+            entity.HasIndex(x => x.TerminalId).HasDatabaseName("IX_InventoryMovements_TerminalId");
+            entity.HasIndex(x => x.UserSessionId).HasDatabaseName("IX_InventoryMovements_UserSessionId");
+            entity.HasIndex(x => new { x.TerminalId, x.IdempotencyKey }).HasDatabaseName("IX_InventoryMovements_Terminal_IdempotencyKey");
+            entity.Property(x => x.QuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.UnitCostBase).HasPrecision(18, 6);
             entity.Property(x => x.TotalCost).HasPrecision(18, 2);
             entity.Property(x => x.MovementType).HasConversion<string>().HasMaxLength(40);
             entity.Property(x => x.ReferenceType).HasMaxLength(80);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
             entity.Property(x => x.Note).HasMaxLength(500);
             entity.HasOne(x => x.Branch)
                 .WithMany()
@@ -165,19 +183,79 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany()
                 .HasForeignKey(x => x.CreatedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.UserSession)
+                .WithMany()
+                .HasForeignKey(x => x.UserSessionId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Terminal)
+                .WithMany()
+                .HasForeignKey(x => x.TerminalId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.KitchenRequestDetail)
+                .WithMany()
+                .HasForeignKey(x => x.KitchenRequestDetailId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<InventoryAdjustment>(entity =>
+        {
+            entity.HasIndex(x => x.PublicId).IsUnique().HasDatabaseName("UX_InventoryAdjustments_PublicId");
+            entity.HasIndex(x => new { x.BranchId, x.CreatedAt }).HasDatabaseName("IX_InventoryAdjustments_BranchId_CreatedAt");
+            entity.HasIndex(x => new { x.BranchId, x.Status }).HasDatabaseName("IX_InventoryAdjustments_BranchId_Status");
+            entity.HasIndex(x => new { x.InventoryItemId, x.LocationType, x.Status }).HasDatabaseName("IX_InventoryAdjustments_Item_Location_Status");
+            entity.Property(x => x.LocationType).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.AdjustmentType).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.QuantityBaseUnit).HasPrecision(18, 4);
+            entity.Property(x => x.DisplayQuantity).HasPrecision(18, 4);
+            entity.Property(x => x.UnitCost).HasPrecision(18, 4);
+            entity.Property(x => x.TotalCost).HasPrecision(18, 4);
+            entity.Property(x => x.DisplayUnitName).HasMaxLength(80);
+            entity.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.Property(x => x.RejectionReason).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.ApprovedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ApprovedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.RejectedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.RejectedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<KitchenRequest>(entity =>
         {
             entity.HasIndex(x => x.RequestNumber).IsUnique().HasDatabaseName("UX_KitchenRequests_RequestNumber");
             entity.HasIndex(x => x.Status).HasDatabaseName("IX_KitchenRequests_Status");
+            entity.HasIndex(x => new { x.KitchenLocationId, x.Status, x.RequestSource }).HasDatabaseName("IX_KitchenRequests_Kitchen_Status_Source");
+            entity.HasIndex(x => new { x.RequestSource, x.Status }).HasDatabaseName("IX_KitchenRequests_Source_Status");
             entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_KitchenRequests_CreatedAt");
             entity.Property(x => x.RequestNumber).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.RequestSource).HasConversion<string>().HasMaxLength(40).HasDefaultValue(KitchenRequestSource.Manual);
+            entity.Property(x => x.AutoReason).HasConversion<string>().HasMaxLength(40).HasDefaultValue(KitchenRequestAutoReason.None);
             entity.Property(x => x.Note).HasMaxLength(500);
+            entity.Property(x => x.ManagerNotes).HasMaxLength(500);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.KitchenLocation)
+                .WithMany()
+                .HasForeignKey(x => x.KitchenLocationId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.RequestedByUser)
                 .WithMany()
@@ -187,13 +265,41 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany()
                 .HasForeignKey(x => x.ApprovedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.ReviewedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.DispatchedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.DispatchedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.CreatedByTerminal)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByTerminalId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.CreatedBySession)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedBySessionId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<KitchenRequestDetail>(entity =>
         {
+            entity.HasIndex(x => new { x.InventoryItemId, x.Status }).HasDatabaseName("IX_KitchenRequestDetails_Item_Status");
+            entity.HasIndex(x => new { x.KitchenLocationId, x.InventoryItemId, x.RequestSource })
+                .IsUnique()
+                .HasFilter("\"RequestSource\" = 'Auto' AND \"Status\" IN ('PendingManagerReview', 'Approved')")
+                .HasDatabaseName("UX_KitchenRequestDetails_ActiveAuto_Item_Kitchen");
             entity.Property(x => x.RequestedQuantity).HasPrecision(18, 3);
             entity.Property(x => x.ApprovedQuantity).HasPrecision(18, 3);
             entity.Property(x => x.DispatchedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.CurrentKitchenQuantityAtRequest).HasPrecision(18, 3);
+            entity.Property(x => x.MinimumKitchenLevelAtRequest).HasPrecision(18, 3);
+            entity.Property(x => x.RecommendedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.PendingRequestQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.StockRoomAvailableAtRequest).HasPrecision(18, 3);
+            entity.Property(x => x.RequestSource).HasConversion<string>().HasMaxLength(40).HasDefaultValue(KitchenRequestSource.Manual);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40).HasDefaultValue(KitchenRequestDetailStatus.PendingManagerReview);
             entity.Property(x => x.Note).HasMaxLength(300);
             entity.HasOne(x => x.KitchenRequest)
                 .WithMany(x => x.Details)
@@ -202,6 +308,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasOne(x => x.InventoryItem)
                 .WithMany()
                 .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.KitchenLocation)
+                .WithMany()
+                .HasForeignKey(x => x.KitchenLocationId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -226,7 +336,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         builder.Entity<RecipeIngredient>(entity =>
         {
             entity.HasIndex(x => new { x.RecipeId, x.InventoryItemId }).IsUnique().HasDatabaseName("UX_RecipeIngredients_RecipeId_Item");
-            entity.Property(x => x.QuantityRequired).HasPrecision(18, 3);
+            entity.Property(x => x.QuantityRequiredBase).HasPrecision(18, 3);
+            entity.Property(x => x.DisplayQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.DisplayUnit).HasMaxLength(40);
             entity.HasOne(x => x.Recipe)
                 .WithMany(x => x.Ingredients)
                 .HasForeignKey(x => x.RecipeId)
@@ -235,6 +347,86 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany(x => x.RecipeIngredients)
                 .HasForeignKey(x => x.InventoryItemId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PreparationRecipe>(entity =>
+        {
+            entity.HasIndex(x => new { x.BranchId, x.Name }).IsUnique().HasDatabaseName("UX_PreparationRecipes_BranchId_Name");
+            entity.HasIndex(x => x.OutputInventoryItemId).HasDatabaseName("IX_PreparationRecipes_OutputInventoryItemId");
+            entity.HasIndex(x => new { x.BranchId, x.IsActive }).HasDatabaseName("IX_PreparationRecipes_BranchId_IsActive");
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.OutputQuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.OutputInventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.OutputInventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PreparationRecipeIngredient>(entity =>
+        {
+            entity.HasIndex(x => new { x.PreparationRecipeId, x.InventoryItemId }).IsUnique().HasDatabaseName("UX_PreparationRecipeIngredients_Recipe_Item");
+            entity.Property(x => x.QuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.DisplayQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.DisplayUnit).HasMaxLength(40);
+            entity.HasOne(x => x.PreparationRecipe)
+                .WithMany(x => x.Ingredients)
+                .HasForeignKey(x => x.PreparationRecipeId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PreparationBatch>(entity =>
+        {
+            entity.HasIndex(x => x.IdempotencyKey)
+                .IsUnique()
+                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("UX_PreparationBatches_IdempotencyKey");
+            entity.HasIndex(x => x.BranchId);
+            entity.HasIndex(x => x.PreparationRecipeId);
+            entity.HasIndex(x => x.TerminalId);
+            entity.HasIndex(x => x.UserSessionId);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.Property(x => x.OutputQuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.TerminalCode).HasMaxLength(40);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
+            entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.PreparationRecipe)
+                .WithMany()
+                .HasForeignKey(x => x.PreparationRecipeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.OutputInventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.OutputInventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Location)
+                .WithMany()
+                .HasForeignKey(x => x.LocationId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.UserSession)
+                .WithMany()
+                .HasForeignKey(x => x.UserSessionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Terminal)
+                .WithMany()
+                .HasForeignKey(x => x.TerminalId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<ExpenseCategory>(entity =>
@@ -318,8 +510,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         {
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => new { x.PurchaseId, x.InventoryItemId });
-            entity.Property(x => x.Quantity).HasPrecision(18, 3);
-            entity.Property(x => x.UnitCost).HasPrecision(18, 2);
+            entity.Property(x => x.PurchaseUnitName).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.PurchaseQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.ConversionFactorToBase).HasPrecision(18, 3);
+            entity.Property(x => x.BaseQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.UnitCostPerPurchaseUnit).HasPrecision(18, 2);
+            entity.Property(x => x.UnitCostBase).HasPrecision(18, 6);
+            entity.Property(x => x.TotalCost).HasPrecision(18, 2);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -571,11 +768,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
         {
             entity.HasIndex(x => x.IdempotencyKey).IsUnique().HasDatabaseName("UX_IdempotencyRecords_IdempotencyKey");
             entity.HasIndex(x => new { x.OperationType, x.IdempotencyKey }).IsUnique().HasDatabaseName("UX_IdempotencyRecords_OperationType_IdempotencyKey");
+            entity.HasIndex(x => new { x.TerminalId, x.IdempotencyKey, x.ReferenceType }).IsUnique().HasDatabaseName("UX_IdempotencyRecords_Terminal_Key_Reference");
             entity.HasIndex(x => new { x.Status, x.CreatedAt }).HasDatabaseName("IX_IdempotencyRecords_Status_CreatedAt");
             entity.HasIndex(x => x.ExpiresAt).HasDatabaseName("IX_IdempotencyRecords_ExpiresAt");
             entity.Property(x => x.IdempotencyKey).HasMaxLength(120).IsRequired();
             entity.Property(x => x.OperationType).HasMaxLength(80).IsRequired();
             entity.Property(x => x.RequestHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ReferenceType).HasMaxLength(80);
             entity.Property(x => x.ResourceType).HasMaxLength(80);
             entity.Property(x => x.ResponseBodySummary).HasMaxLength(500);
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
@@ -590,6 +789,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasOne(x => x.Terminal)
                 .WithMany()
                 .HasForeignKey(x => x.TerminalId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.UserSession)
+                .WithMany()
+                .HasForeignKey(x => x.UserSessionId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -629,49 +832,49 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             new InventoryLocation { Id = 2, BranchId = 1, Name = "Kitchen", IsActive = true, CreatedAt = seedDate });
 
         builder.Entity<InventoryItem>().HasData(
-            new InventoryItem { Id = 1, BranchId = 1, Name = "Coca-Cola", Unit = "0.5L Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 2, BranchId = 1, Name = "Coca-Cola", Unit = "1L Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 3, BranchId = 1, Name = "Coca-Cola", Unit = "1.5L Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 4, BranchId = 1, Name = "Coca-Cola", Unit = "300ML Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 5, BranchId = 1, Name = "Aluminium Foil", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 6, BranchId = 1, Name = "BBQ Sauce", Unit = "Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 7, BranchId = 1, Name = "Black Olives", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 8, BranchId = 1, Name = "Cheese", Unit = "Kg", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 9, BranchId = 1, Name = "Chicken Patty", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 10, BranchId = 1, Name = "Cling Film", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 11, BranchId = 1, Name = "Cooking Oil", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 12, BranchId = 1, Name = "Eka", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 13, BranchId = 1, Name = "F1 Packing", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 14, BranchId = 1, Name = "F2 Packing", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 15, BranchId = 1, Name = "Food Bag Large", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 16, BranchId = 1, Name = "Forks", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 17, BranchId = 1, Name = "Fries", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 18, BranchId = 1, Name = "Fry Oil", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 19, BranchId = 1, Name = "Gas Cylinder", Unit = "Refill", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 20, BranchId = 1, Name = "Ice Sugar", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 21, BranchId = 1, Name = "Imli Sauce", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 22, BranchId = 1, Name = "Jalapeño", Unit = "Jar", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 23, BranchId = 1, Name = "Mayonnaise", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 24, BranchId = 1, Name = "Medium Food Bags", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 25, BranchId = 1, Name = "Mushrooms", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 26, BranchId = 1, Name = "Mustard Sauce", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 27, BranchId = 1, Name = "Nido", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 28, BranchId = 1, Name = "Nuggets", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 29, BranchId = 1, Name = "Paratha", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 30, BranchId = 1, Name = "Pepperoni", Unit = "Kg", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 31, BranchId = 1, Name = "Peri Peri Sauce", Unit = "Bottle", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 32, BranchId = 1, Name = "Pizza Sauce", Unit = "Liter", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 33, BranchId = 1, Name = "Pizza Table", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 34, BranchId = 1, Name = "Printer Rolls", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 35, BranchId = 1, Name = "Sandwich Packing", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 36, BranchId = 1, Name = "Sausages", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 37, BranchId = 1, Name = "Sweet Corn", Unit = "Tin", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 38, BranchId = 1, Name = "Tomato Chilly Sachet", Unit = "Piece", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 39, BranchId = 1, Name = "Tape Roll", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 40, BranchId = 1, Name = "Tikka Masala", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 41, BranchId = 1, Name = "Tissue Roll", Unit = "Roll", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 42, BranchId = 1, Name = "Yeast", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
-            new InventoryItem { Id = 43, BranchId = 1, Name = "Zinger Recipe Masala", Unit = "Packet", ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate });
+            new InventoryItem { Id = 1, BranchId = 1, Name = "Coca-Cola 0.5L", BaseUnit = "Piece", PurchaseUnitName = "0.5L Bottle", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 2, BranchId = 1, Name = "Coca-Cola 1L", BaseUnit = "Piece", PurchaseUnitName = "1L Bottle", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 3, BranchId = 1, Name = "Coca-Cola 1.5L", BaseUnit = "Piece", PurchaseUnitName = "1.5L Bottle", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 4, BranchId = 1, Name = "Coca-Cola 300ML", BaseUnit = "Piece", PurchaseUnitName = "300ML Bottle", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 5, BranchId = 1, Name = "Aluminium Foil", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 6, BranchId = 1, Name = "BBQ Sauce", BaseUnit = "ML", PurchaseUnitName = "Bottle", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 7, BranchId = 1, Name = "Black Olives", BaseUnit = "Gram", PurchaseUnitName = "Tin", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 8, BranchId = 1, Name = "Cheese", BaseUnit = "Gram", PurchaseUnitName = "Kg", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 9, BranchId = 1, Name = "Chicken Patty", BaseUnit = "Piece", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 10, BranchId = 1, Name = "Cling Film", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 11, BranchId = 1, Name = "Cooking Oil", BaseUnit = "ML", PurchaseUnitName = "Liter", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 12, BranchId = 1, Name = "Eka", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 13, BranchId = 1, Name = "F1 Packing", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 14, BranchId = 1, Name = "F2 Packing", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 15, BranchId = 1, Name = "Food Bag Large", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 16, BranchId = 1, Name = "Forks", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 17, BranchId = 1, Name = "Fries", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 18, BranchId = 1, Name = "Fry Oil", BaseUnit = "ML", PurchaseUnitName = "Tin", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 19, BranchId = 1, Name = "Gas Cylinder", BaseUnit = "Piece", PurchaseUnitName = "Refill", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 20, BranchId = 1, Name = "Ice Sugar", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 21, BranchId = 1, Name = "Imli Sauce", BaseUnit = "ML", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 22, BranchId = 1, Name = "Jalapeno", BaseUnit = "Gram", PurchaseUnitName = "Jar", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 23, BranchId = 1, Name = "Mayonnaise", BaseUnit = "ML", PurchaseUnitName = "Liter", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 24, BranchId = 1, Name = "Medium Food Bags", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 25, BranchId = 1, Name = "Mushrooms", BaseUnit = "Gram", PurchaseUnitName = "Tin", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 26, BranchId = 1, Name = "Mustard Sauce", BaseUnit = "ML", PurchaseUnitName = "Liter", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 27, BranchId = 1, Name = "Nido", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 28, BranchId = 1, Name = "Nuggets", BaseUnit = "Piece", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 29, BranchId = 1, Name = "Paratha", BaseUnit = "Piece", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 30, BranchId = 1, Name = "Pepperoni", BaseUnit = "Gram", PurchaseUnitName = "Kg", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 31, BranchId = 1, Name = "Peri Peri Sauce", BaseUnit = "ML", PurchaseUnitName = "Bottle", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 32, BranchId = 1, Name = "Pizza Sauce", BaseUnit = "ML", PurchaseUnitName = "Liter", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 33, BranchId = 1, Name = "Pizza Table", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 34, BranchId = 1, Name = "Printer Rolls", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 35, BranchId = 1, Name = "Sandwich Packing", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 36, BranchId = 1, Name = "Sausages", BaseUnit = "Piece", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 37, BranchId = 1, Name = "Sweet Corn", BaseUnit = "Gram", PurchaseUnitName = "Tin", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 38, BranchId = 1, Name = "Tomato Chilly Sachet", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 39, BranchId = 1, Name = "Tape Roll", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 40, BranchId = 1, Name = "Tikka Masala", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 41, BranchId = 1, Name = "Tissue Roll", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1, ReorderLevel = 10, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 42, BranchId = 1, Name = "Yeast", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate },
+            new InventoryItem { Id = 43, BranchId = 1, Name = "Zinger Recipe Masala", BaseUnit = "Gram", PurchaseUnitName = "Packet", DefaultConversionFactorToBase = 1000, ReorderLevel = 1000, IsActive = true, CreatedAt = seedDate, UpdatedAt = seedDate });
 
         builder.Entity<ExpenseCategory>().HasData(
             new ExpenseCategory { Id = 1, BranchId = 1, Name = "Rent", IsActive = true, CreatedAt = seedDate },

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BranchPOS.Models;
 
@@ -14,11 +15,28 @@ public class InventoryItem
     public string Name { get; set; } = string.Empty;
 
     [Required, MaxLength(40)]
-    public string Unit { get; set; } = string.Empty;
+    public string BaseUnit { get; set; } = "Piece";
+
+    [MaxLength(80)]
+    public string? PurchaseUnitName { get; set; }
+
+    [Range(typeof(decimal), "0.001", "1000000000")]
+    public decimal? DefaultConversionFactorToBase { get; set; }
 
     public decimal ReorderLevel { get; set; }
 
+    public decimal? MinimumKitchenLevel { get; set; }
+
+    [NotMapped]
+    public string Unit
+    {
+        get => BaseUnit;
+        set => BaseUnit = value;
+    }
+
     public bool IsActive { get; set; } = true;
+
+    public bool IsPreparedItem { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

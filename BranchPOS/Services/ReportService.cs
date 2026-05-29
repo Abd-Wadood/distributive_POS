@@ -90,6 +90,8 @@ public class ReportService : IReportService
         }
 
         var rowCount = await query.CountAsync(cancellationToken);
+        query = ApplyStableOrdering(query, entityType);
+
         var rows = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -106,6 +108,37 @@ public class ReportService : IReportService
                 return FormatValue(value);
             }).ToList()).ToList()
         };
+    }
+
+    private static IQueryable<TEntity> ApplyStableOrdering<TEntity>(
+        IQueryable<TEntity> query,
+        Microsoft.EntityFrameworkCore.Metadata.IEntityType entityType)
+        where TEntity : class
+    {
+        var orderingProperties = entityType.FindPrimaryKey()?.Properties
+            .Where(x => !x.IsShadowProperty())
+            .Select(x => x.Name)
+            .ToList();
+
+        if (orderingProperties is null || orderingProperties.Count == 0)
+        {
+            orderingProperties = entityType.GetProperties()
+                .Where(x => !x.IsShadowProperty())
+                .OrderBy(x => x.Name)
+                .Select(x => x.Name)
+                .Take(1)
+                .ToList();
+        }
+
+        IOrderedQueryable<TEntity>? orderedQuery = null;
+        foreach (var propertyName in orderingProperties)
+        {
+            orderedQuery = orderedQuery is null
+                ? query.OrderBy(x => EF.Property<object>(x, propertyName))
+                : orderedQuery.ThenBy(x => EF.Property<object>(x, propertyName));
+        }
+
+        return orderedQuery ?? query;
     }
 
     private static IQueryable<TEntity> ApplyDateFilter<TEntity>(IQueryable<TEntity> query, string propertyName, DateTime? from, DateTime? to)

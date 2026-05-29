@@ -101,6 +101,7 @@ public class IdempotencyService : IIdempotencyService
             UserId = userId,
             BranchId = branchId,
             TerminalId = terminalId,
+            ReferenceType = operationType,
             Status = IdempotencyStatus.InProgress,
             ExpiresAt = DateTime.UtcNow.AddDays(Math.Max(1, _options.RetentionDays))
         };
@@ -150,6 +151,8 @@ public class IdempotencyService : IIdempotencyService
         record.Status = IdempotencyStatus.Completed;
         record.ResourceType = resourceType;
         record.ResourceId = resourceId;
+        record.ReferenceType = resourceType;
+        record.ReferenceId = resourceId;
         record.ResponseCode = responseCode;
         record.ResponseBodySummary = responseBodySummary.Length > 500 ? responseBodySummary[..500] : responseBodySummary;
         record.CompletedAt = DateTime.UtcNow;

@@ -20,6 +20,8 @@ public class ProductEditViewModel
     public List<SelectListItem> Categories { get; set; } = new();
 
     public List<RecipeItemQuantityViewModel> RecipeItems { get; set; } = new();
+
+    public List<InventoryItem> InventoryItems { get; set; } = new();
 }
 
 public class RecipeItemQuantityViewModel
@@ -30,14 +32,14 @@ public class RecipeItemQuantityViewModel
 
     public string Unit { get; set; } = string.Empty;
 
-    public decimal QuantityRequired { get; set; }
+    public decimal? QuantityRequired { get; set; }
 
     public static RecipeItemQuantityViewModel FromInventoryItem(InventoryItem item, decimal quantity = 0) =>
         new()
         {
             InventoryItemId = item.Id,
             Name = item.Name,
-            Unit = item.Unit,
+            Unit = item.BaseUnit,
             QuantityRequired = quantity
         };
 }

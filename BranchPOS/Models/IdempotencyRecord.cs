@@ -27,6 +27,15 @@ public class IdempotencyRecord
 
     public Terminal? Terminal { get; set; }
 
+    public int? UserSessionId { get; set; }
+
+    public UserSession? UserSession { get; set; }
+
+    [MaxLength(80)]
+    public string? ReferenceType { get; set; }
+
+    public int? ReferenceId { get; set; }
+
     [MaxLength(80)]
     public string? ResourceType { get; set; }
 

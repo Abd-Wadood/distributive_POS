@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace BranchPOS.Models;
 
 public class PurchaseItem
@@ -16,9 +19,34 @@ public class PurchaseItem
 
     public InventoryItem? InventoryItem { get; set; }
 
-    public decimal Quantity { get; set; }
+    [MaxLength(80)]
+    public string PurchaseUnitName { get; set; } = string.Empty;
 
-    public decimal UnitCost { get; set; }
+    public decimal PurchaseQuantity { get; set; }
+
+    public decimal ConversionFactorToBase { get; set; }
+
+    public decimal BaseQuantity { get; set; }
+
+    public decimal UnitCostPerPurchaseUnit { get; set; }
+
+    public decimal UnitCostBase { get; set; }
+
+    public decimal TotalCost { get; set; }
+
+    [NotMapped]
+    public decimal Quantity
+    {
+        get => PurchaseQuantity;
+        set => PurchaseQuantity = value;
+    }
+
+    [NotMapped]
+    public decimal UnitCost
+    {
+        get => UnitCostPerPurchaseUnit;
+        set => UnitCostPerPurchaseUnit = value;
+    }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

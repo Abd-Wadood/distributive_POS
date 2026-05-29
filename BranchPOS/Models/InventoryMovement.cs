@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BranchPOS.Models;
 
@@ -22,11 +23,25 @@ public class InventoryMovement
 
     public InventoryLocation? ToLocation { get; set; }
 
-    public decimal Quantity { get; set; }
+    public decimal QuantityBase { get; set; }
 
-    public decimal? UnitCost { get; set; }
+    public decimal? UnitCostBase { get; set; }
 
     public decimal TotalCost { get; set; }
+
+    [NotMapped]
+    public decimal Quantity
+    {
+        get => QuantityBase;
+        set => QuantityBase = value;
+    }
+
+    [NotMapped]
+    public decimal? UnitCost
+    {
+        get => UnitCostBase;
+        set => UnitCostBase = value;
+    }
 
     public InventoryMovementType MovementType { get; set; }
 
@@ -34,6 +49,21 @@ public class InventoryMovement
     public string? ReferenceType { get; set; }
 
     public int? ReferenceId { get; set; }
+
+    public int? KitchenRequestDetailId { get; set; }
+
+    public KitchenRequestDetail? KitchenRequestDetail { get; set; }
+
+    public int? UserSessionId { get; set; }
+
+    public UserSession? UserSession { get; set; }
+
+    public int? TerminalId { get; set; }
+
+    public Terminal? Terminal { get; set; }
+
+    [MaxLength(120)]
+    public string? IdempotencyKey { get; set; }
 
     [MaxLength(500)]
     public string? Note { get; set; }

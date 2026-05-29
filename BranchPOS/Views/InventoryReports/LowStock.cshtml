@@ -12,7 +12,7 @@
         <tr>
             <td>@stock.InventoryLocation?.Name</td>
             <td>@stock.InventoryItem?.Name</td>
-            <td>@stock.Quantity.ToString("0.###") @stock.InventoryItem?.Unit</td>
+            <td>@stock.QuantityBase.ToString("0.###") @stock.InventoryItem?.BaseUnit</td>
             <td>@stock.InventoryItem?.ReorderLevel.ToString("0.###")</td>
         </tr>
     }

@@ -43,8 +43,8 @@ public class ProductService : IProductService
     public async Task CreateProductAsync(Product product, Dictionary<int, decimal> recipeItemQuantities, CancellationToken cancellationToken = default)
     {
         product.BranchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
-        var normalized = recipeItemQuantities.Where(x => x.Value > 0).ToDictionary(x => x.Key, x => x.Value);
-        await EnsureInventoryItemsBelongToBranchAsync(product.BranchId, normalized.Keys, cancellationToken);
+        var normalized = NormalizeRecipeQuantities(recipeItemQuantities);
+        var inventoryItems = await LoadValidInventoryItemsAsync(product.BranchId, normalized.Keys, cancellationToken);
         if (normalized.Count > 0)
         {
             var recipe = new Recipe { BranchId = product.BranchId, Product = product, IsActive = true };
@@ -53,7 +53,9 @@ public class ProductService : IProductService
                 recipe.Ingredients.Add(new RecipeIngredient
                 {
                     InventoryItemId = pair.Key,
-                    QuantityRequired = pair.Value
+                    QuantityRequiredBase = pair.Value,
+                    DisplayQuantity = pair.Value,
+                    DisplayUnit = inventoryItems[pair.Key].BaseUnit
                 });
             }
 
@@ -81,8 +83,8 @@ public class ProductService : IProductService
         existing.Name = product.Name;
         existing.Price = product.Price;
         existing.CategoryId = product.CategoryId;
-        var normalized = recipeItemQuantities.Where(x => x.Value > 0).ToDictionary(x => x.Key, x => x.Value);
-        await EnsureInventoryItemsBelongToBranchAsync(branchId, normalized.Keys, cancellationToken);
+        var normalized = NormalizeRecipeQuantities(recipeItemQuantities);
+        var inventoryItems = await LoadValidInventoryItemsAsync(branchId, normalized.Keys, cancellationToken);
 
         var recipe = existing.Recipes.FirstOrDefault(x => x.IsActive);
         if (recipe is null && normalized.Count > 0)
@@ -100,7 +102,9 @@ public class ProductService : IProductService
                 recipe.Ingredients.Add(new RecipeIngredient
                 {
                     InventoryItemId = pair.Key,
-                    QuantityRequired = pair.Value
+                    QuantityRequiredBase = pair.Value,
+                    DisplayQuantity = pair.Value,
+                    DisplayUnit = inventoryItems[pair.Key].BaseUnit
                 });
             }
         }
@@ -109,18 +113,32 @@ public class ProductService : IProductService
         _posMenuCacheInvalidator.Invalidate();
     }
 
-    private async Task EnsureInventoryItemsBelongToBranchAsync(int branchId, IEnumerable<int> inventoryItemIds, CancellationToken cancellationToken)
+    private static Dictionary<int, decimal> NormalizeRecipeQuantities(Dictionary<int, decimal> recipeItemQuantities)
+    {
+        if (recipeItemQuantities.Any(x => x.Key <= 0 || x.Value <= 0))
+        {
+            throw new InvalidOperationException("Recipe ingredients must have an inventory item and a quantity greater than zero.");
+        }
+
+        return recipeItemQuantities;
+    }
+
+    private async Task<Dictionary<int, InventoryItem>> LoadValidInventoryItemsAsync(int branchId, IEnumerable<int> inventoryItemIds, CancellationToken cancellationToken)
     {
         var ids = inventoryItemIds.Distinct().ToList();
         if (ids.Count == 0)
         {
-            return;
+            return [];
         }
 
-        var count = await _context.InventoryItems.CountAsync(x => x.BranchId == branchId && x.IsActive && ids.Contains(x.Id), cancellationToken);
-        if (count != ids.Count)
+        var items = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive && ids.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        if (items.Count != ids.Count)
         {
             throw new InvalidOperationException("One or more recipe inventory items do not belong to the active branch.");
         }
+
+        return items;
     }
 }

@@ -1,0 +1,166 @@
+@model BranchPOS.ViewModels.PreparationBatchViewModel
+@{
+    ViewData["Title"] = "Add Prepared";
+}
+
+<h1>Add Prepared</h1>
+
+<form method="get" class="row g-3 mb-4">
+    <div class="col-md-6">
+        <label asp-for="PreparationRecipeId" class="form-label">Prepared item recipe</label>
+        <select asp-for="PreparationRecipeId" asp-items="Model.Recipes" class="form-select" onchange="this.form.submit()">
+            <option value="">Select recipe</option>
+        </select>
+    </div>
+</form>
+
+@if (Model.SelectedRecipe is not null)
+{
+    <div class="mb-3">
+        <h2 class="h4">@Model.SelectedRecipe.Name</h2>
+        <p class="text-muted mb-1">
+            Recipe output: @Model.SelectedRecipe.OutputInventoryItem?.Name
+        </p>
+        <p class="text-muted mb-1">
+            Standard recipe output: @Model.SelectedRecipe.OutputQuantityBase.ToString("0.###")
+            @Model.SelectedRecipe.OutputInventoryItem?.BaseUnit
+        </p>
+        <p class="text-muted mb-1">Destination location: Stock Room</p>
+        <p class="text-muted">
+            Adding prepared stock will deduct input ingredients from Stock Room and add the prepared item to Stock Room.
+        </p>
+    </div>
+
+    <table class="table">
+        <thead><tr><th>Ingredient</th><th>Required</th><th>Stock Room available</th><th>Status</th></tr></thead>
+        <tbody>
+        @foreach (var ingredient in Model.Ingredients)
+        {
+            <tr>
+                <td>@ingredient.InventoryItemName</td>
+                <td data-recipe-required="@ingredient.RecipeQuantity.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-available="@ingredient.AvailableQuantity.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                    data-unit="@ingredient.BaseUnit">@ingredient.RequiredQuantity.ToString("0.###") @ingredient.BaseUnit</td>
+                <td>@ingredient.AvailableQuantity.ToString("0.###") @ingredient.BaseUnit</td>
+                <td>
+                    @if (ingredient.HasEnoughStock)
+                    {
+                        <span class="badge text-bg-success">Enough</span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-danger">Insufficient</span>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <form method="post">
+        <input type="hidden" asp-for="IdempotencyKey" />
+        <input type="hidden" asp-for="PreparationRecipeId" />
+        @if (Model.UsesRecipeOutputCount)
+        {
+            <input type="hidden" asp-for="OutputQuantityBase" id="outputQuantityInput" />
+        }
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="mb-3">
+            @if (Model.UsesRecipeOutputCount)
+            {
+                <label asp-for="PreparedItemCount" class="form-label">@Model.SelectedRecipe.OutputInventoryItem?.Name to add</label>
+                <div class="input-group">
+                    <input asp-for="PreparedItemCount" class="form-control" type="number" step="1" min="1" id="preparedCountInput" />
+                    <span class="input-group-text">@Model.SelectedRecipe.OutputInventoryItem?.Name</span>
+                </div>
+                <div class="form-text">
+                    Enter how many prepared @Model.SelectedRecipe.OutputInventoryItem?.Name you made.
+                    <span id="baseQuantityPreview"></span>
+                </div>
+                <span asp-validation-for="PreparedItemCount" class="text-danger"></span>
+            }
+            else
+            {
+                <label asp-for="OutputQuantityBase" class="form-label">Actual output quantity (@Model.SelectedRecipe.OutputInventoryItem?.BaseUnit)</label>
+                <div class="input-group">
+                    <input asp-for="OutputQuantityBase" class="form-control" type="number" step="0.001" min="0.001" id="outputQuantityInput" />
+                    <span class="input-group-text">@Model.SelectedRecipe.OutputInventoryItem?.BaseUnit</span>
+                </div>
+                <div class="form-text">
+                    Enter the actual quantity produced. Completing this batch will scale ingredient usage based on the recipe.
+                </div>
+                <span asp-validation-for="OutputQuantityBase" class="text-danger"></span>
+            }
+        </div>
+        <div class="mb-3">
+            <label asp-for="Notes" class="form-label">Notes</label>
+            <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" @(Model.Ingredients.All(x => x.HasEnoughStock) ? "" : "disabled")>Add to Stock Room</button>
+        <a class="btn btn-secondary" asp-controller="InventoryReports" asp-action="StockRoom">Cancel</a>
+    </form>
+}
+
+@section Scripts {
+    @if (Model.SelectedRecipe is not null)
+    {
+        <script>
+            (() => {
+                const standardOutput = Number('@Model.SelectedRecipe.OutputQuantityBase');
+                const usesRecipeOutputCount = @Model.UsesRecipeOutputCount.ToString().ToLowerInvariant();
+                const preparedCountInput = document.getElementById('preparedCountInput');
+                const outputQuantityInput = document.getElementById('outputQuantityInput');
+                const baseQuantityPreview = document.getElementById('baseQuantityPreview');
+                const completeButton = document.querySelector('form[method="post"] button[type="submit"]');
+                const outputUnit = '@Model.SelectedRecipe.OutputInventoryItem?.BaseUnit';
+                const rows = [...document.querySelectorAll('tbody tr')].map(row => {
+                    const requiredCell = row.children[1];
+                    const statusCell = row.children[3];
+                    return {
+                        requiredCell,
+                        statusCell,
+                        baseRequired: Number(requiredCell?.dataset.recipeRequired || '0'),
+                        available: Number(requiredCell?.dataset.available || '0'),
+                        unit: requiredCell?.dataset.unit || ''
+                    };
+                });
+
+                const format = value => Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : '0';
+
+                const recalculate = () => {
+                    const enteredQuantity = Number((usesRecipeOutputCount ? preparedCountInput : outputQuantityInput)?.value || '0');
+                    const outputQuantity = usesRecipeOutputCount ? enteredQuantity * standardOutput : enteredQuantity;
+                    const scale = standardOutput > 0 ? outputQuantity / standardOutput : 0;
+                    let allEnough = enteredQuantity > 0;
+
+                    if (usesRecipeOutputCount && outputQuantityInput) {
+                        outputQuantityInput.value = Number.isFinite(outputQuantity) ? outputQuantity.toString() : '';
+                    }
+                    if (baseQuantityPreview) {
+                        baseQuantityPreview.textContent = enteredQuantity > 0
+                            ? ` This equals ${format(outputQuantity)} ${outputUnit}.`
+                            : '';
+                    }
+
+                    for (const row of rows) {
+                        const required = row.baseRequired * scale;
+                        const enough = row.available >= required && required > 0;
+                        allEnough = allEnough && enough;
+                        row.requiredCell.textContent = `${format(required)} ${row.unit}`;
+                        row.statusCell.innerHTML = enough
+                            ? '<span class="badge text-bg-success">Enough</span>'
+                            : '<span class="badge text-bg-danger">Insufficient</span>';
+                    }
+
+                    if (completeButton) {
+                        completeButton.disabled = !allEnough;
+                    }
+                };
+
+                outputQuantityInput?.addEventListener('input', recalculate);
+                preparedCountInput?.addEventListener('input', recalculate);
+                recalculate();
+            })();
+        </script>
+    }
+}

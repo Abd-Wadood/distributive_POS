@@ -15,7 +15,7 @@
             <td>@movement.FromLocation?.Name</td>
             <td>@movement.ToLocation?.Name</td>
             <td>@movement.MovementType</td>
-            <td>@movement.Quantity.ToString("0.###")</td>
+            <td>@movement.QuantityBase.ToString("0.###") @movement.InventoryItem?.BaseUnit</td>
             <td>@movement.ReferenceType @movement.ReferenceId</td>
             <td>@movement.CreatedByUser?.UserName</td>
             <td>@movement.Note</td>

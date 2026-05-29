@@ -520,9 +520,9 @@ public class UserSessionService : IUserSessionService
             PurchasesCount = await _context.Purchases.CountAsync(x => x.UserSessionId == session.Id, cancellationToken),
             TotalPurchaseAmount = await _context.PurchaseItems
                 .Where(x => x.Purchase!.UserSessionId == session.Id)
-                .SumAsync(x => x.Quantity * x.UnitCost, cancellationToken),
+                .SumAsync(x => x.TotalCost, cancellationToken),
             InventoryAdjustmentsCount = await _context.InventoryMovements.CountAsync(x => x.CreatedByUserId == session.UserId && x.MovementType == InventoryMovementType.Adjustment, cancellationToken),
-            LowStockWarnings = await _context.InventoryStocks.CountAsync(x => x.BranchId == session.BranchId && x.Quantity <= x.InventoryItem!.ReorderLevel, cancellationToken),
+            LowStockWarnings = await _context.InventoryStocks.CountAsync(x => x.BranchId == session.BranchId && x.QuantityBase <= x.InventoryItem!.ReorderLevel, cancellationToken),
             ExpectedClosingCash = session.ExpectedClosingCash ?? await CalculateExpectedClosingCashAsync(session.Id, session.OpeningCashAmount, cancellationToken),
             CountedClosingCash = session.CountedClosingCash,
             CashDifference = session.CashDifference

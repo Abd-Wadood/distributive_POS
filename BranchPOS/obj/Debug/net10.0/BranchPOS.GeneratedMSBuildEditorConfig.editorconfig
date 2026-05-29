@@ -78,6 +78,22 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryAdjustments/Create.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5QWRqdXN0bWVudHNcQ3JlYXRlLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryAdjustments/Details.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5QWRqdXN0bWVudHNcRGV0YWlscy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryAdjustments/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5QWRqdXN0bWVudHNcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryAdjustments/WastageSummary.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5QWRqdXN0bWVudHNcV2FzdGFnZVN1bW1hcnkuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryItems/Create.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5SXRlbXNcQ3JlYXRlLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
@@ -144,6 +160,18 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Orders/Receipt.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcT3JkZXJzXFJlY2VpcHQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/PreparationRecipes/Edit.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHJlcGFyYXRpb25SZWNpcGVzXEVkaXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/PreparationRecipes/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHJlcGFyYXRpb25SZWNpcGVzXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/PreparedStock/Add.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUHJlcGFyZWRTdG9ja1xBZGQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Products/Create.cshtml]

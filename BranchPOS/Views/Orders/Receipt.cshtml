@@ -34,18 +34,18 @@
             <tr>
                 <td>
                     @item.ProductNameSnapshot
-                    <div class="text-muted small">@item.UnitPrice.ToString("0.00") each</div>
+                    <div class="text-muted small">@CurrencyFormatter.Format(item.UnitPrice) each</div>
                 </td>
                 <td class="text-end">@item.Quantity</td>
-                <td class="text-end">@item.LineTotal.ToString("0.00")</td>
+                <td class="text-end">@CurrencyFormatter.Format(item.LineTotal)</td>
             </tr>
         }
         </tbody>
     </table>
 
-    <div class="d-flex justify-content-between"><span>Subtotal</span><strong>@Model.Subtotal.ToString("0.00")</strong></div>
-    <div class="d-flex justify-content-between"><span>Discount</span><strong>@Model.DiscountAmount.ToString("0.00")</strong></div>
-    <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><span>Total</span><strong>@Model.TotalAmount.ToString("0.00")</strong></div>
+    <div class="d-flex justify-content-between"><span>Subtotal</span><strong>@CurrencyFormatter.Format(Model.Subtotal)</strong></div>
+    <div class="d-flex justify-content-between"><span>Discount</span><strong>@CurrencyFormatter.Format(Model.DiscountAmount)</strong></div>
+    <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><span>Total</span><strong>@CurrencyFormatter.Format(Model.TotalAmount)</strong></div>
 
     @if (!string.IsNullOrWhiteSpace(Model.Notes))
     {

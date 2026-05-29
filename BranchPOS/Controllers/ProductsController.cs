@@ -94,14 +94,25 @@ public class ProductsController : Controller
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "StockManager")]
     public async Task<IActionResult> Create(ProductEditViewModel model)
     {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var recipeItems = await ValidateRecipeItemsAsync(model, branchId);
+
         if (!ModelState.IsValid)
         {
             return View(await BuildProductModelAsync(model));
         }
 
-        await _productService.CreateProductAsync(
-            new Product { Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
-            model.RecipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired));
+        try
+        {
+            await _productService.CreateProductAsync(
+                new Product { Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
+                recipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired!.Value));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(await BuildProductModelAsync(model));
+        }
 
         return RedirectToAction(nameof(Index));
     }
@@ -134,14 +145,25 @@ public class ProductsController : Controller
             return BadRequest();
         }
 
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var recipeItems = await ValidateRecipeItemsAsync(model, branchId);
+
         if (!ModelState.IsValid)
         {
             return View(await BuildProductModelAsync(model));
         }
 
-        await _productService.UpdateProductAsync(
-            new Product { Id = model.Id, Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
-            model.RecipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired));
+        try
+        {
+            await _productService.UpdateProductAsync(
+                new Product { Id = model.Id, Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
+                recipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired!.Value));
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(await BuildProductModelAsync(model));
+        }
 
         return RedirectToAction(nameof(Index));
     }
@@ -153,17 +175,98 @@ public class ProductsController : Controller
             .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.CategoryId))
             .ToListAsync();
 
-        var existingQuantities = product?.Recipes.FirstOrDefault(x => x.IsActive)?.Ingredients.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired) ?? [];
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        var inventoryItems = await _context.InventoryItems
+        model.InventoryItems = await _context.InventoryItems
             .Where(x => x.BranchId == branchId && x.IsActive)
             .OrderBy(x => x.Name)
-            .ThenBy(x => x.Unit)
+            .ThenBy(x => x.BaseUnit)
             .ToListAsync();
-        model.RecipeItems = inventoryItems
-            .Select(x => RecipeItemQuantityViewModel.FromInventoryItem(x, existingQuantities.TryGetValue(x.Id, out var quantity) ? quantity : 0))
-            .ToList();
+
+        if (product is not null)
+        {
+            model.RecipeItems = product.Recipes
+                .FirstOrDefault(x => x.IsActive)?
+                .Ingredients
+                .OrderBy(x => x.InventoryItem!.Name)
+                .Select(x => RecipeItemQuantityViewModel.FromInventoryItem(x.InventoryItem!, x.QuantityRequiredBase))
+                .ToList() ?? [];
+        }
+
+        FillRecipeItemDisplayFields(model, model.InventoryItems.ToDictionary(x => x.Id));
+        EnsureOneRecipeItemRow(model);
 
         return model;
+    }
+
+    private async Task<List<RecipeItemQuantityViewModel>> ValidateRecipeItemsAsync(ProductEditViewModel model, int branchId)
+    {
+        if (!await _context.Categories.AnyAsync(x => x.Id == model.CategoryId))
+        {
+            ModelState.AddModelError(nameof(model.CategoryId), "Category is required.");
+        }
+
+        var inventoryIds = model.RecipeItems.Select(x => x.InventoryItemId).Where(x => x > 0).Distinct().ToList();
+        var inventoryItems = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive && inventoryIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+        var normalized = new List<RecipeItemQuantityViewModel>();
+
+        for (var i = 0; i < model.RecipeItems.Count; i++)
+        {
+            var row = model.RecipeItems[i];
+            var isEmpty = row.InventoryItemId <= 0 && !row.QuantityRequired.HasValue;
+            if (isEmpty)
+            {
+                continue;
+            }
+
+            if (row.InventoryItemId <= 0)
+            {
+                ModelState.AddModelError($"RecipeItems[{i}].InventoryItemId", "Inventory item is required.");
+            }
+            else if (!inventoryItems.TryGetValue(row.InventoryItemId, out var item))
+            {
+                ModelState.AddModelError($"RecipeItems[{i}].InventoryItemId", "Inventory item must be active and belong to the active branch.");
+            }
+            else
+            {
+                row.Name = item.Name;
+                row.Unit = item.BaseUnit;
+            }
+
+            if (!row.QuantityRequired.HasValue || row.QuantityRequired <= 0)
+            {
+                ModelState.AddModelError($"RecipeItems[{i}].QuantityRequired", "Quantity required per product must be greater than zero.");
+            }
+
+            normalized.Add(row);
+        }
+
+        if (normalized.GroupBy(x => x.InventoryItemId).Any(x => x.Key > 0 && x.Count() > 1))
+        {
+            ModelState.AddModelError(string.Empty, "Duplicate inventory item rows are not allowed.");
+        }
+
+        return normalized;
+    }
+
+    private static void FillRecipeItemDisplayFields(ProductEditViewModel model, Dictionary<int, InventoryItem> inventoryItems)
+    {
+        foreach (var row in model.RecipeItems)
+        {
+            if (row.InventoryItemId > 0 && inventoryItems.TryGetValue(row.InventoryItemId, out var item))
+            {
+                row.Name = item.Name;
+                row.Unit = item.BaseUnit;
+            }
+        }
+    }
+
+    private static void EnsureOneRecipeItemRow(ProductEditViewModel model)
+    {
+        if (model.RecipeItems.Count == 0)
+        {
+            model.RecipeItems.Add(new RecipeItemQuantityViewModel());
+        }
     }
 }

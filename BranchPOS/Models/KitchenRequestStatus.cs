@@ -3,7 +3,11 @@ namespace BranchPOS.Models;
 public enum KitchenRequestStatus
 {
     Pending,
+    PendingManagerReview,
     Approved,
     Rejected,
-    Dispatched
+    Dispatched,
+    PartiallyDispatched,
+    Received,
+    Cancelled
 }

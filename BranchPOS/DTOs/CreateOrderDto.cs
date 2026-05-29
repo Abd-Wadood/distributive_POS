@@ -1,9 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using BranchPOS.Validation;
 
 namespace BranchPOS.DTOs;
 
 public class CreateOrderDto
 {
+    [Required]
     public string IdempotencyKey { get; set; } = string.Empty;
 
     public int? DraftOrderId { get; set; }
@@ -33,6 +35,8 @@ public class CreateOrderDto
     [Required]
     public CustomerDto Customer { get; set; } = new();
 
+    [Required]
+    [MinCollectionCount(1, ErrorMessage = "Order must contain at least one item.")]
     public List<OrderItemDto> Items { get; set; } = new();
 }
 

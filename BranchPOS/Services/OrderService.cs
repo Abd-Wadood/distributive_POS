@@ -14,15 +14,17 @@ public class OrderService : IOrderService
     private readonly IUserSessionService _userSessionService;
     private readonly IBranchContextService _branchContextService;
     private readonly IIdempotencyService _idempotencyService;
+    private readonly IInventoryTransactionService _inventoryTransactionService;
     private const int MaxOrderItemQuantity = 10000;
 
-    public OrderService(AppDbContext context, ICustomerService customerService, IUserSessionService userSessionService, IBranchContextService branchContextService, IIdempotencyService idempotencyService)
+    public OrderService(AppDbContext context, ICustomerService customerService, IUserSessionService userSessionService, IBranchContextService branchContextService, IIdempotencyService idempotencyService, IInventoryTransactionService inventoryTransactionService)
     {
         _context = context;
         _customerService = customerService;
         _userSessionService = userSessionService;
         _branchContextService = branchContextService;
         _idempotencyService = idempotencyService;
+        _inventoryTransactionService = inventoryTransactionService;
     }
 
     public async Task<List<Order>> GetOrdersAsync(CancellationToken cancellationToken = default)
@@ -125,7 +127,7 @@ public class OrderService : IOrderService
             InventoryLocation? kitchen = null;
             Dictionary<int, RequiredInventoryItem> requiredInventoryItems = [];
             List<InventoryStock> lockedInventoryStocks = [];
-            kitchen = await GetOrCreateLocationAsync(dto.BranchId, "Kitchen", cancellationToken);
+            kitchen = await _inventoryTransactionService.GetOrCreateLocationAsync(dto.BranchId, "Kitchen", cancellationToken);
             requiredInventoryItems = BuildRequiredInventoryItems(pricedItems);
             lockedInventoryStocks = await LockInventoryStocksAsync(requiredInventoryItems.Keys, dto.BranchId, kitchen.Id, cancellationToken);
             ValidateStock(requiredInventoryItems, lockedInventoryStocks);
@@ -167,21 +169,30 @@ public class OrderService : IOrderService
 
             foreach (var required in requiredInventoryItems)
             {
-                var inventory = lockedInventoryStocks.Single(x => x.InventoryItemId == required.Key);
-                inventory.Quantity -= required.Value.Quantity;
-                _context.InventoryMovements.Add(new InventoryMovement
-                {
-                    BranchId = dto.BranchId,
-                    InventoryItemId = required.Key,
-                    FromLocationId = kitchen!.Id,
-                    Quantity = required.Value.Quantity,
-                    UnitCost = inventory.AverageUnitCost,
-                    TotalCost = required.Value.Quantity * inventory.AverageUnitCost,
-                    MovementType = InventoryMovementType.Consumption,
-                    ReferenceType = nameof(Order),
-                    ReferenceId = order.Id,
-                    CreatedByUserId = dto.CashierId
-                });
+                var mutation = await _inventoryTransactionService.DebitAsync(
+                    dto.BranchId,
+                    required.Key,
+                    kitchen!.Id,
+                    required.Value.Quantity,
+                    required.Value.Name,
+                    required.Value.Unit,
+                    "kitchen",
+                    cancellationToken);
+                _inventoryTransactionService.AddMovement(new InventoryMovementRequest(
+                    dto.BranchId,
+                    required.Key,
+                    kitchen.Id,
+                    null,
+                    required.Value.Quantity,
+                    mutation.AverageUnitCostBase,
+                    required.Value.Quantity * mutation.AverageUnitCostBase,
+                    InventoryMovementType.Consumption,
+                    nameof(Order),
+                    order.Id,
+                    dto.UserSessionId,
+                    dto.TerminalId,
+                    dto.IdempotencyKey,
+                    dto.CashierId));
             }
 
             await _context.SaveChangesAsync(cancellationToken);
@@ -352,7 +363,7 @@ public class OrderService : IOrderService
             var product = products.Single(x => x.Id == requestedItem.ProductId);
             if (requireRecipe && !product.Recipes.Any(x => x.IsActive && x.Ingredients.Count > 0))
             {
-                throw new BusinessException($"Recipe not configured for product {product.Name}.");
+                throw new BusinessException($"Product recipe is missing for {product.Name}.");
             }
 
             pricedItems.Add(new PricedOrderItem(product, requestedItem.Quantity));
@@ -369,7 +380,7 @@ public class OrderService : IOrderService
             var recipe = pricedItem.Product.Recipes.FirstOrDefault(x => x.IsActive);
             if (recipe is null || recipe.Ingredients.Count == 0)
             {
-                throw new BusinessException($"Recipe not configured for product {pricedItem.Product.Name}.");
+                throw new BusinessException($"Product recipe is missing for {pricedItem.Product.Name}.");
             }
 
             if (recipe.BranchId != pricedItem.Product.BranchId)
@@ -389,14 +400,14 @@ public class OrderService : IOrderService
                     throw new BusinessException($"Recipe inventory item branch does not match product branch for {pricedItem.Product.Name}.");
                 }
 
-                var requiredQuantity = recipeItem.QuantityRequired * pricedItem.Quantity;
+                var requiredQuantity = recipeItem.QuantityRequiredBase * pricedItem.Quantity;
                 if (requiredIngredients.TryGetValue(recipeItem.InventoryItemId, out var existing))
                 {
                     requiredIngredients[recipeItem.InventoryItemId] = existing with { Quantity = existing.Quantity + requiredQuantity };
                 }
                 else
                 {
-                    requiredIngredients[recipeItem.InventoryItemId] = new RequiredInventoryItem(recipeItem.InventoryItem.Name, recipeItem.InventoryItem.Unit, requiredQuantity);
+                    requiredIngredients[recipeItem.InventoryItemId] = new RequiredInventoryItem(recipeItem.InventoryItem.Name, recipeItem.InventoryItem.BaseUnit, requiredQuantity);
                 }
             }
         }
@@ -429,25 +440,11 @@ public class OrderService : IOrderService
         foreach (var required in requiredIngredients)
         {
             var inventory = lockedInventories.Single(x => x.InventoryItemId == required.Key);
-            if (inventory.Quantity < required.Value.Quantity)
+            if (inventory.QuantityBase < required.Value.Quantity)
             {
-                throw new BusinessException($"Insufficient kitchen stock: {required.Value.Name} required {required.Value.Quantity:0.###} {required.Value.Unit}, available {inventory.Quantity:0.###} {required.Value.Unit}.");
+                throw new BusinessException($"Not enough kitchen quantity for {required.Value.Name}. Required: {required.Value.Quantity:0.###} {required.Value.Unit}, Available: {inventory.QuantityBase:0.###} {required.Value.Unit}.");
             }
         }
-    }
-
-    private async Task<InventoryLocation> GetOrCreateLocationAsync(int branchId, string name, CancellationToken cancellationToken)
-    {
-        var location = await _context.InventoryLocations.FirstOrDefaultAsync(x => x.BranchId == branchId && x.Name == name, cancellationToken);
-        if (location is not null)
-        {
-            return location;
-        }
-
-        location = new InventoryLocation { BranchId = branchId, Name = name };
-        _context.InventoryLocations.Add(location);
-        await _context.SaveChangesAsync(cancellationToken);
-        return location;
     }
 
     private static void ApplyOrderFields(Order order, OrderType orderType, OrderStatus status, Customer? customer, CreateOrderDto dto)

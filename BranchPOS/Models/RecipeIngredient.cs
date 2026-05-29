@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace BranchPOS.Models;
 
 public class RecipeIngredient
@@ -12,5 +15,17 @@ public class RecipeIngredient
 
     public InventoryItem? InventoryItem { get; set; }
 
-    public decimal QuantityRequired { get; set; }
+    public decimal QuantityRequiredBase { get; set; }
+
+    public decimal? DisplayQuantity { get; set; }
+
+    [MaxLength(40)]
+    public string? DisplayUnit { get; set; }
+
+    [NotMapped]
+    public decimal QuantityRequired
+    {
+        get => QuantityRequiredBase;
+        set => QuantityRequiredBase = value;
+    }
 }

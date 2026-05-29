@@ -131,7 +131,7 @@ else if (isAdmin && Model is not null)
                             <td>@branch.OnlineTerminals</td>
                             <td>@branch.ActiveSessions</td>
                             <td>@branch.TodayOrders</td>
-                            <td>@branch.TodaySales.ToString("C")</td>
+                            <td>@CurrencyFormatter.Format(branch.TodaySales)</td>
                             <td>@branch.LowStockCount</td>
                             <td><span class="badge @BadgeClass(branch.Status)">@branch.Status</span></td>
                         </tr>
@@ -188,7 +188,7 @@ else if (isAdmin && Model is not null)
                     <div class="row g-3 mb-3">
                         <div class="col-6 col-lg-3">
                             <div class="small text-muted">Sales</div>
-                            <div class="h5">@Model.SalesSnapshot.TodaySales.ToString("C")</div>
+                            <div class="h5">@CurrencyFormatter.Format(Model.SalesSnapshot.TodaySales)</div>
                         </div>
                         <div class="col-6 col-lg-3">
                             <div class="small text-muted">Completed</div>
@@ -200,7 +200,7 @@ else if (isAdmin && Model is not null)
                         </div>
                         <div class="col-6 col-lg-3">
                             <div class="small text-muted">Avg Order</div>
-                            <div class="h5">@Model.SalesSnapshot.AverageOrderValue.ToString("C")</div>
+                            <div class="h5">@CurrencyFormatter.Format(Model.SalesSnapshot.AverageOrderValue)</div>
                         </div>
                     </div>
 
@@ -218,7 +218,7 @@ else if (isAdmin && Model is not null)
                                 <div class="progress flex-grow-1" style="height: 8px;">
                                     <div class="progress-bar" style="width:@hour.PercentOfPeak%"></div>
                                 </div>
-                                <div class="small text-end" style="width:96px">@hour.SalesTotal.ToString("C")</div>
+                                <div class="small text-end" style="width:96px">@CurrencyFormatter.Format(hour.SalesTotal)</div>
                             </div>
                         }
                     }
@@ -383,6 +383,7 @@ else
                 <a class="list-group-item list-group-item-action" asp-controller="Products" asp-action="Index">Products</a>
                 <a class="list-group-item list-group-item-action" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a>
                 <a class="list-group-item list-group-item-action" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a>
+                <a class="list-group-item list-group-item-action" asp-controller="PreparedStock" asp-action="Add">Add Prepared</a>
                 <a class="list-group-item list-group-item-action" asp-controller="Purchases" asp-action="Index">Purchases</a>
                 <a class="list-group-item list-group-item-action" asp-controller="Sessions" asp-action="Index">Manage stock session</a>
             }

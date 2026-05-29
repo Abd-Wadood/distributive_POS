@@ -1,6 +1,9 @@
 @model BranchPOS.ViewModels.ProductEditViewModel
+@{
+    var inventoryItems = Model.InventoryItems;
+}
 
-<form method="post">
+<form method="post" id="productForm">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <input asp-for="Id" type="hidden" />
     <div class="mb-3">
@@ -15,27 +18,107 @@
     </div>
     <div class="mb-3">
         <label asp-for="CategoryId" class="form-label"></label>
-        <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select"></select>
+        <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select">
+            <option value="">Select category</option>
+        </select>
+        <span asp-validation-for="CategoryId" class="text-danger"></span>
     </div>
-    <h3>Recipe ingredients</h3>
-    <table class="table">
-        <thead><tr><th>Inventory item</th><th>Unit</th><th>Quantity required per product</th></tr></thead>
-        <tbody>
+
+    <h2 class="h4">Recipe Ingredients</h2>
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Inventory item</th>
+                <th>Quantity required per product</th>
+                <th>Unit</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="recipeItemRows">
         @for (var i = 0; i < Model.RecipeItems.Count; i++)
         {
-            <tr>
+            <tr class="recipe-item-row">
                 <td>
-                    @Model.RecipeItems[i].Name
-                    <input asp-for="RecipeItems[i].InventoryItemId" type="hidden" />
-                    <input asp-for="RecipeItems[i].Name" type="hidden" />
-                    <input asp-for="RecipeItems[i].Unit" type="hidden" />
+                    <select name="RecipeItems[@i].InventoryItemId" class="form-select inventory-item-select">
+                        <option value="">Select item</option>
+                        @foreach (var item in inventoryItems)
+                        {
+                            <option value="@item.Id" selected="@(Model.RecipeItems[i].InventoryItemId == item.Id)" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
+                        }
+                    </select>
+                    <span asp-validation-for="RecipeItems[i].InventoryItemId" class="text-danger"></span>
                 </td>
-                <td>@Model.RecipeItems[i].Unit</td>
-                <td><input asp-for="RecipeItems[i].QuantityRequired" class="form-control" /></td>
+                <td>
+                    <input name="RecipeItems[@i].QuantityRequired" value="@Model.RecipeItems[i].QuantityRequired" class="form-control quantity-input" type="number" step="0.001" min="0" />
+                    <span asp-validation-for="RecipeItems[i].QuantityRequired" class="text-danger"></span>
+                </td>
+                <td><span class="unit-label text-muted">@Model.RecipeItems[i].Unit</span></td>
+                <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
             </tr>
         }
         </tbody>
     </table>
+    <div class="mb-3">
+        <button class="btn btn-outline-primary" type="button" id="addIngredientButton">Add ingredient</button>
+    </div>
+
     <button type="submit" class="btn btn-primary">Save</button>
     <a class="btn btn-secondary" asp-action="Index">Cancel</a>
 </form>
+
+<template id="recipeItemRowTemplate">
+    <tr class="recipe-item-row">
+        <td>
+            <select class="form-select inventory-item-select">
+                <option value="">Select item</option>
+                @foreach (var item in inventoryItems)
+                {
+                    <option value="@item.Id" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
+                }
+            </select>
+        </td>
+        <td><input class="form-control quantity-input" type="number" step="0.001" min="0" /></td>
+        <td><span class="unit-label text-muted"></span></td>
+        <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
+    </tr>
+</template>
+
+<script>
+    (() => {
+        const rows = document.getElementById('recipeItemRows');
+        const template = document.getElementById('recipeItemRowTemplate');
+
+        const updateUnitLabel = row => {
+            const option = row.querySelector('.inventory-item-select')?.selectedOptions[0];
+            row.querySelector('.unit-label').textContent = option?.value ? option.dataset.baseUnit || '' : '';
+        };
+
+        const refreshRowNames = () => {
+            const allRows = rows.querySelectorAll('.recipe-item-row');
+            allRows.forEach((row, index) => {
+                row.querySelector('.inventory-item-select').name = `RecipeItems[${index}].InventoryItemId`;
+                row.querySelector('.quantity-input').name = `RecipeItems[${index}].QuantityRequired`;
+                row.querySelector('.remove-row-button').disabled = allRows.length === 1;
+            });
+        };
+
+        const wireRow = row => {
+            row.querySelector('.inventory-item-select')?.addEventListener('change', () => updateUnitLabel(row));
+            row.querySelector('.remove-row-button')?.addEventListener('click', () => {
+                row.remove();
+                refreshRowNames();
+            });
+            updateUnitLabel(row);
+        };
+
+        document.getElementById('addIngredientButton')?.addEventListener('click', () => {
+            const row = template.content.firstElementChild.cloneNode(true);
+            rows.appendChild(row);
+            wireRow(row);
+            refreshRowNames();
+        });
+
+        rows.querySelectorAll('.recipe-item-row').forEach(wireRow);
+        refreshRowNames();
+    })();
+</script>

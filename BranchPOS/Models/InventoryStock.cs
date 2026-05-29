@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace BranchPOS.Models;
 
 public class InventoryStock
@@ -16,9 +18,23 @@ public class InventoryStock
 
     public InventoryLocation? InventoryLocation { get; set; }
 
-    public decimal Quantity { get; set; }
+    public decimal QuantityBase { get; set; }
 
-    public decimal AverageUnitCost { get; set; }
+    public decimal AverageUnitCostBase { get; set; }
+
+    [NotMapped]
+    public decimal Quantity
+    {
+        get => QuantityBase;
+        set => QuantityBase = value;
+    }
+
+    [NotMapped]
+    public decimal AverageUnitCost
+    {
+        get => AverageUnitCostBase;
+        set => AverageUnitCostBase = value;
+    }
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

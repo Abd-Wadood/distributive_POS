@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BranchPOS")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3058f1259edd5ddd48233c25da688a3bc213dea3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9d1b1a56a707bbe8c0fa53bd2179fdf16a292cfc")]
 [assembly: System.Reflection.AssemblyProductAttribute("BranchPOS")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BranchPOS")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

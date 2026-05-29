@@ -19,8 +19,8 @@
         <tr>
             <td>@product.Name</td>
             <td>@product.Category?.Name</td>
-            <td>@product.Price.ToString("0.00")</td>
-            <td>@string.Join(", ", product.Recipes.FirstOrDefault(x => x.IsActive)?.Ingredients.Select(x => $"{x.InventoryItem?.Name} ({x.InventoryItem?.Unit}): {x.QuantityRequired:0.###}") ?? [])</td>
+            <td>@CurrencyFormatter.Format(product.Price)</td>
+            <td>@string.Join(", ", product.Recipes.FirstOrDefault(x => x.IsActive)?.Ingredients.Select(x => $"{x.InventoryItem?.Name} ({x.InventoryItem?.BaseUnit}): {x.QuantityRequiredBase:0.###}") ?? [])</td>
             <td>
                 @if (User.IsInRole("Admin") || User.IsInRole("StockManager"))
                 {

@@ -1,0 +1,62 @@
+@model BranchPOS.DTOs.CreateInventoryAdjustmentDto
+@using BranchPOS.Models
+@{
+    ViewData["Title"] = "New Inventory Adjustment";
+    var items = (IEnumerable<SelectListItem>)ViewBag.InventoryItems;
+    var unitOptions = (IEnumerable<SelectListItem>)ViewBag.UnitOptions;
+}
+
+<h1>New Inventory Adjustment</h1>
+
+<form asp-action="Create" method="post" class="row g-3">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="col-md-6">
+        <label asp-for="LocationType" class="form-label">Location</label>
+        <select asp-for="LocationType" class="form-select" asp-items="Html.GetEnumSelectList<InventoryLocationType>()">
+            <option value="">Select location</option>
+        </select>
+        <span asp-validation-for="LocationType" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="InventoryItemId" class="form-label">Item</label>
+        <select asp-for="InventoryItemId" class="form-select" asp-items="items">
+            <option value="">Select item</option>
+        </select>
+        <span asp-validation-for="InventoryItemId" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="AdjustmentType" class="form-label">Adjustment type</label>
+        <select asp-for="AdjustmentType" class="form-select" asp-items="Html.GetEnumSelectList<InventoryAdjustmentType>()">
+            <option value="">Select type</option>
+        </select>
+        <span asp-validation-for="AdjustmentType" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Quantity" class="form-label"></label>
+        <input asp-for="Quantity" class="form-control" type="number" min="0.001" step="0.001" />
+        <span asp-validation-for="Quantity" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="UnitName" class="form-label">Unit</label>
+        <select asp-for="UnitName" class="form-select" asp-items="unitOptions">
+            <option value="">Base unit</option>
+        </select>
+    </div>
+    <div class="col-12">
+        <label asp-for="Reason" class="form-label"></label>
+        <input asp-for="Reason" class="form-control" maxlength="500" />
+        <span asp-validation-for="Reason" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <label asp-for="Notes" class="form-label"></label>
+        <textarea asp-for="Notes" class="form-control" rows="3" maxlength="500"></textarea>
+    </div>
+    <div class="col-12">
+        <button class="btn btn-primary" type="submit">Create adjustment</button>
+        <a class="btn btn-secondary" asp-action="Index">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

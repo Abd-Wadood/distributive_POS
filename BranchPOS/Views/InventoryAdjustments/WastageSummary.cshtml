@@ -1,0 +1,39 @@
+@model IEnumerable<BranchPOS.DTOs.InventoryAdjustmentResultDto>
+@using BranchPOS.Models
+@{
+    ViewData["Title"] = "Wastage Summary";
+    var lossTypes = new[]
+    {
+        InventoryAdjustmentType.Waste,
+        InventoryAdjustmentType.Missing,
+        InventoryAdjustmentType.Expired,
+        InventoryAdjustmentType.Damaged,
+        InventoryAdjustmentType.Spillage,
+        InventoryAdjustmentType.CorrectionDecrease
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Wastage Summary</h1>
+    <a class="btn btn-outline-secondary" asp-action="Index">Back</a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input name="from" value="@ViewBag.From" class="form-control" type="date" /></div>
+    <div class="col-md-3"><input name="to" value="@ViewBag.To" class="form-control" type="date" /></div>
+    <div class="col-md-2"><button class="btn btn-outline-primary" type="submit">Filter</button></div>
+</form>
+
+<table class="table table-striped w-auto">
+    <tbody>
+        <tr><th>Stock Room Waste Cost</th><td>@CurrencyFormatter.Format(Model.Where(x => x.LocationType == InventoryLocationType.StockRoom && x.AdjustmentType == InventoryAdjustmentType.Waste).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Kitchen Waste Cost</th><td>@CurrencyFormatter.Format(Model.Where(x => x.LocationType == InventoryLocationType.Kitchen && x.AdjustmentType == InventoryAdjustmentType.Waste).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Missing Stock Cost</th><td>@CurrencyFormatter.Format(Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.Missing).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Expired Stock Cost</th><td>@CurrencyFormatter.Format(Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.Expired).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Damaged Stock Cost</th><td>@CurrencyFormatter.Format(Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.Damaged).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Spillage Cost</th><td>@CurrencyFormatter.Format(Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.Spillage).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Correction Increase Total</th><td>@CurrencyFormatter.Format(Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.CorrectionIncrease).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Correction Decrease Total</th><td>@CurrencyFormatter.Format(Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.CorrectionDecrease).Sum(x => x.TotalCost))</td></tr>
+        <tr><th>Total Inventory Loss</th><td>@CurrencyFormatter.Format(Model.Where(x => lossTypes.Contains(x.AdjustmentType)).Sum(x => x.TotalCost) - Model.Where(x => x.AdjustmentType == InventoryAdjustmentType.CorrectionIncrease).Sum(x => x.TotalCost))</td></tr>
+    </tbody>
+</table>

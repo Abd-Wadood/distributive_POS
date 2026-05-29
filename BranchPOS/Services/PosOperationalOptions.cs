@@ -16,5 +16,9 @@ public class PosOperationalOptions
 
     public decimal SessionCashDifferenceApprovalThreshold { get; set; } = 100m;
 
+    public decimal InventoryAdjustmentAutoApprovalCostThreshold { get; set; } = 500m;
+
+    public decimal InventoryAdjustmentAutoApprovalQuantityThresholdBase { get; set; } = 1000m;
+
     public TimeSpan MinimumSessionDurationBeforeClose { get; set; } = TimeSpan.FromMinutes(5);
 }

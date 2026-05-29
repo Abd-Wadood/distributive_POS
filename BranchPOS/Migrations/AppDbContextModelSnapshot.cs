@@ -496,6 +496,13 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<int?>("ReferenceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<string>("RequestHash")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -526,6 +533,9 @@ namespace BranchPOS.Migrations
                     b.Property<string>("UserId")
                         .HasColumnType("text");
 
+                    b.Property<int?>("UserSessionId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
@@ -537,9 +547,9 @@ namespace BranchPOS.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_IdempotencyRecords_IdempotencyKey");
 
-                    b.HasIndex("TerminalId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("UserSessionId");
 
                     b.HasIndex("OperationType", "IdempotencyKey")
                         .IsUnique()
@@ -548,7 +558,125 @@ namespace BranchPOS.Migrations
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("IX_IdempotencyRecords_Status_CreatedAt");
 
+                    b.HasIndex("TerminalId", "IdempotencyKey", "ReferenceType")
+                        .IsUnique()
+                        .HasDatabaseName("UX_IdempotencyRecords_Terminal_Key_Reference");
+
                     b.ToTable("IdempotencyRecords");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.InventoryAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdjustmentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("DisplayQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("DisplayUnitName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsSynced")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LocationType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("QuantityBaseUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RejectedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("SyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryAdjustments_PublicId");
+
+                    b.HasIndex("RejectedByUserId");
+
+                    b.HasIndex("BranchId", "CreatedAt")
+                        .HasDatabaseName("IX_InventoryAdjustments_BranchId_CreatedAt");
+
+                    b.HasIndex("BranchId", "Status")
+                        .HasDatabaseName("IX_InventoryAdjustments_BranchId_Status");
+
+                    b.HasIndex("InventoryItemId", "LocationType", "Status")
+                        .HasDatabaseName("IX_InventoryAdjustments_Item_Location_Status");
+
+                    b.ToTable("InventoryAdjustments");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.InventoryItem", b =>
@@ -559,30 +687,47 @@ namespace BranchPOS.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BaseUnit")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal?>("DefaultConversionFactorToBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<bool>("IsPreparedItem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("MinimumKitchenLevel")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<string>("PurchaseUnitName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<decimal>("ReorderLevel")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -592,9 +737,9 @@ namespace BranchPOS.Migrations
                     b.HasIndex("BranchId", "IsActive")
                         .HasDatabaseName("IX_InventoryItems_BranchId_IsActive");
 
-                    b.HasIndex("BranchId", "Name", "Unit")
+                    b.HasIndex("BranchId", "Name", "BaseUnit")
                         .IsUnique()
-                        .HasDatabaseName("UX_InventoryItems_BranchId_Name_Unit");
+                        .HasDatabaseName("UX_InventoryItems_BranchId_Name_BaseUnit");
 
                     b.ToTable("InventoryItems");
 
@@ -602,474 +747,603 @@ namespace BranchPOS.Migrations
                         new
                         {
                             Id = 1,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
-                            Name = "Coca-Cola",
+                            IsPreparedItem = false,
+                            Name = "Coca-Cola 0.5L",
+                            PurchaseUnitName = "0.5L Bottle",
                             ReorderLevel = 10m,
-                            Unit = "0.5L Bottle",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 2,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
-                            Name = "Coca-Cola",
+                            IsPreparedItem = false,
+                            Name = "Coca-Cola 1L",
+                            PurchaseUnitName = "1L Bottle",
                             ReorderLevel = 10m,
-                            Unit = "1L Bottle",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 3,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
-                            Name = "Coca-Cola",
+                            IsPreparedItem = false,
+                            Name = "Coca-Cola 1.5L",
+                            PurchaseUnitName = "1.5L Bottle",
                             ReorderLevel = 10m,
-                            Unit = "1.5L Bottle",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 4,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
-                            Name = "Coca-Cola",
+                            IsPreparedItem = false,
+                            Name = "Coca-Cola 300ML",
+                            PurchaseUnitName = "300ML Bottle",
                             ReorderLevel = 10m,
-                            Unit = "300ML Bottle",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 5,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Aluminium Foil",
+                            PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
-                            Unit = "Roll",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 6,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "BBQ Sauce",
-                            ReorderLevel = 10m,
-                            Unit = "Bottle",
+                            PurchaseUnitName = "Bottle",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 7,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Black Olives",
-                            ReorderLevel = 10m,
-                            Unit = "Tin",
+                            PurchaseUnitName = "Tin",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 8,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Cheese",
-                            ReorderLevel = 10m,
-                            Unit = "Kg",
+                            PurchaseUnitName = "Kg",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 9,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Chicken Patty",
+                            PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
-                            Unit = "Packet",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 10,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Cling Film",
+                            PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
-                            Unit = "Roll",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 11,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Cooking Oil",
-                            ReorderLevel = 10m,
-                            Unit = "Liter",
+                            PurchaseUnitName = "Liter",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 12,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Eka",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 13,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "F1 Packing",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 14,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "F2 Packing",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 15,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Food Bag Large",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 16,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Forks",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 17,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Fries",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 18,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Fry Oil",
-                            ReorderLevel = 10m,
-                            Unit = "Tin",
+                            PurchaseUnitName = "Tin",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 19,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Gas Cylinder",
+                            PurchaseUnitName = "Refill",
                             ReorderLevel = 10m,
-                            Unit = "Refill",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 20,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Ice Sugar",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 21,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Imli Sauce",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 22,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
-                            Name = "Jalapeño",
-                            ReorderLevel = 10m,
-                            Unit = "Jar",
+                            IsPreparedItem = false,
+                            Name = "Jalapeno",
+                            PurchaseUnitName = "Jar",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 23,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Mayonnaise",
-                            ReorderLevel = 10m,
-                            Unit = "Liter",
+                            PurchaseUnitName = "Liter",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 24,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Medium Food Bags",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 25,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Mushrooms",
-                            ReorderLevel = 10m,
-                            Unit = "Tin",
+                            PurchaseUnitName = "Tin",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 26,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Mustard Sauce",
-                            ReorderLevel = 10m,
-                            Unit = "Liter",
+                            PurchaseUnitName = "Liter",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 27,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Nido",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 28,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Nuggets",
+                            PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
-                            Unit = "Packet",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 29,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Paratha",
+                            PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
-                            Unit = "Packet",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 30,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Pepperoni",
-                            ReorderLevel = 10m,
-                            Unit = "Kg",
+                            PurchaseUnitName = "Kg",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 31,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Peri Peri Sauce",
-                            ReorderLevel = 10m,
-                            Unit = "Bottle",
+                            PurchaseUnitName = "Bottle",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 32,
+                            BaseUnit = "ML",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Pizza Sauce",
-                            ReorderLevel = 10m,
-                            Unit = "Liter",
+                            PurchaseUnitName = "Liter",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 33,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Pizza Table",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 34,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Printer Rolls",
+                            PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
-                            Unit = "Roll",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 35,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Sandwich Packing",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 36,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Sausages",
+                            PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
-                            Unit = "Packet",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 37,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Sweet Corn",
-                            ReorderLevel = 10m,
-                            Unit = "Tin",
+                            PurchaseUnitName = "Tin",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 38,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Tomato Chilly Sachet",
+                            PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
-                            Unit = "Piece",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 39,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Tape Roll",
+                            PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
-                            Unit = "Roll",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 40,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Tikka Masala",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 41,
+                            BaseUnit = "Piece",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Tissue Roll",
+                            PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
-                            Unit = "Roll",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 42,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Yeast",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 43,
+                            BaseUnit = "Gram",
                             BranchId = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DefaultConversionFactorToBase = 1000m,
                             IsActive = true,
+                            IsPreparedItem = false,
                             Name = "Zinger Recipe Masala",
-                            ReorderLevel = 10m,
-                            Unit = "Packet",
+                            PurchaseUnitName = "Packet",
+                            ReorderLevel = 1000m,
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
@@ -1148,7 +1422,14 @@ namespace BranchPOS.Migrations
                     b.Property<int?>("FromLocationId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
                     b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("KitchenRequestDetailId")
                         .HasColumnType("integer");
 
                     b.Property<string>("MovementType")
@@ -1160,7 +1441,7 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<decimal>("Quantity")
+                    b.Property<decimal>("QuantityBase")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
@@ -1171,6 +1452,9 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<int?>("TerminalId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("ToLocationId")
                         .HasColumnType("integer");
 
@@ -1178,9 +1462,12 @@ namespace BranchPOS.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<decimal?>("UnitCost")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
+                    b.Property<decimal?>("UnitCostBase")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<int?>("UserSessionId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -1196,15 +1483,35 @@ namespace BranchPOS.Migrations
                     b.HasIndex("InventoryItemId")
                         .HasDatabaseName("IX_InventoryMovements_InventoryItemId");
 
+                    b.HasIndex("KitchenRequestDetailId")
+                        .HasDatabaseName("IX_InventoryMovements_KitchenRequestDetailId");
+
                     b.HasIndex("MovementType")
                         .HasDatabaseName("IX_InventoryMovements_MovementType");
 
+                    b.HasIndex("TerminalId")
+                        .HasDatabaseName("IX_InventoryMovements_TerminalId");
+
                     b.HasIndex("ToLocationId");
+
+                    b.HasIndex("UserSessionId")
+                        .HasDatabaseName("IX_InventoryMovements_UserSessionId");
 
                     b.HasIndex("ReferenceType", "ReferenceId")
                         .HasDatabaseName("IX_InventoryMovements_Reference");
 
-                    b.ToTable("InventoryMovements");
+                    b.HasIndex("TerminalId", "IdempotencyKey")
+                        .HasDatabaseName("IX_InventoryMovements_Terminal_IdempotencyKey");
+
+                    b.HasIndex("ReferenceType", "ReferenceId", "MovementType", "InventoryItemId", "FromLocationId", "ToLocationId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryMovements_DuplicateProtection")
+                        .HasFilter("\"ReferenceType\" IS NOT NULL AND \"ReferenceId\" IS NOT NULL AND \"IdempotencyKey\" IS NOT NULL");
+
+                    b.ToTable("InventoryMovements", t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryMovements_QuantityBase_Positive", "\"QuantityBase\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("BranchPOS.Models.InventoryStock", b =>
@@ -1215,9 +1522,9 @@ namespace BranchPOS.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("AverageUnitCost")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)");
+                    b.Property<decimal>("AverageUnitCostBase")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
 
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
@@ -1228,7 +1535,7 @@ namespace BranchPOS.Migrations
                     b.Property<int>("InventoryLocationId")
                         .HasColumnType("integer");
 
-                    b.Property<decimal>("Quantity")
+                    b.Property<decimal>("QuantityBase")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
@@ -1253,7 +1560,7 @@ namespace BranchPOS.Migrations
 
                     b.ToTable("InventoryStocks", t =>
                         {
-                            t.HasCheckConstraint("CK_InventoryStocks_Quantity_NonNegative", "\"Quantity\" >= 0");
+                            t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_NonNegative", "\"QuantityBase\" >= 0");
                         });
                 });
 
@@ -1271,14 +1578,37 @@ namespace BranchPOS.Migrations
                     b.Property<string>("ApprovedByUserId")
                         .HasColumnType("text");
 
+                    b.Property<string>("AutoReason")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("None");
+
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("CreatedBySessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CreatedByTerminalId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DispatchedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DispatchedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("KitchenLocationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ManagerNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Note")
                         .HasMaxLength(500)
@@ -1289,7 +1619,20 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<string>("RequestSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Manual");
+
                     b.Property<string>("RequestedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByUserId")
                         .HasColumnType("text");
 
                     b.Property<string>("Status")
@@ -1306,14 +1649,28 @@ namespace BranchPOS.Migrations
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("IX_KitchenRequests_CreatedAt");
 
+                    b.HasIndex("CreatedBySessionId");
+
+                    b.HasIndex("CreatedByTerminalId");
+
+                    b.HasIndex("DispatchedByUserId");
+
                     b.HasIndex("RequestNumber")
                         .IsUnique()
                         .HasDatabaseName("UX_KitchenRequests_RequestNumber");
 
                     b.HasIndex("RequestedByUserId");
 
+                    b.HasIndex("ReviewedByUserId");
+
                     b.HasIndex("Status")
                         .HasDatabaseName("IX_KitchenRequests_Status");
+
+                    b.HasIndex("RequestSource", "Status")
+                        .HasDatabaseName("IX_KitchenRequests_Source_Status");
+
+                    b.HasIndex("KitchenLocationId", "Status", "RequestSource")
+                        .HasDatabaseName("IX_KitchenRequests_Kitchen_Status_Source");
 
                     b.ToTable("KitchenRequests");
                 });
@@ -1330,6 +1687,10 @@ namespace BranchPOS.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
+                    b.Property<decimal>("CurrentKitchenQuantityAtRequest")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<decimal?>("DispatchedQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
@@ -1337,22 +1698,61 @@ namespace BranchPOS.Migrations
                     b.Property<int>("InventoryItemId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("KitchenLocationId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("KitchenRequestId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("MinimumKitchenLevelAtRequest")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
 
                     b.Property<string>("Note")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<decimal>("PendingRequestQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<decimal>("RecommendedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("RequestSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Manual");
+
                     b.Property<decimal>("RequestedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("PendingManagerReview");
+
+                    b.Property<decimal>("StockRoomAvailableAtRequest")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("InventoryItemId");
-
                     b.HasIndex("KitchenRequestId");
+
+                    b.HasIndex("InventoryItemId", "Status")
+                        .HasDatabaseName("IX_KitchenRequestDetails_Item_Status");
+
+                    b.HasIndex("KitchenLocationId", "InventoryItemId", "RequestSource")
+                        .IsUnique()
+                        .HasDatabaseName("UX_KitchenRequestDetails_ActiveAuto_Item_Kitchen")
+                        .HasFilter("\"RequestSource\" = 'Auto' AND \"Status\" IN ('PendingManagerReview', 'Approved')");
 
                     b.ToTable("KitchenRequestDetails");
                 });
@@ -1580,6 +1980,174 @@ namespace BranchPOS.Migrations
                     b.ToTable("OrderItems");
                 });
 
+            modelBuilder.Entity("BranchPOS.Models.PreparationBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("OutputInventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("OutputQuantityBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<int>("PreparationRecipeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("TerminalCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int?>("TerminalId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("UserSessionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PreparationBatches_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("OutputInventoryItemId");
+
+                    b.HasIndex("PreparationRecipeId");
+
+                    b.HasIndex("TerminalId");
+
+                    b.HasIndex("UserSessionId");
+
+                    b.ToTable("PreparationBatches");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PreparationRecipe", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<int>("OutputInventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("OutputQuantityBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OutputInventoryItemId")
+                        .HasDatabaseName("IX_PreparationRecipes_OutputInventoryItemId");
+
+                    b.HasIndex("BranchId", "IsActive")
+                        .HasDatabaseName("IX_PreparationRecipes_BranchId_IsActive");
+
+                    b.HasIndex("BranchId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PreparationRecipes_BranchId_Name");
+
+                    b.ToTable("PreparationRecipes");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PreparationRecipeIngredient", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("DisplayQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("DisplayUnit")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PreparationRecipeId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("PreparationRecipeId", "InventoryItemId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PreparationRecipeIngredients_Recipe_Item");
+
+                    b.ToTable("PreparationRecipeIngredients");
+                });
+
             modelBuilder.Entity("BranchPOS.Models.Product", b =>
                 {
                     b.Property<int>("Id")
@@ -1713,8 +2281,16 @@ namespace BranchPOS.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal>("BaseQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("ConversionFactorToBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1725,11 +2301,24 @@ namespace BranchPOS.Migrations
                     b.Property<int>("PurchaseId")
                         .HasColumnType("integer");
 
-                    b.Property<decimal>("Quantity")
+                    b.Property<decimal>("PurchaseQuantity")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
-                    b.Property<decimal>("UnitCost")
+                    b.Property<string>("PurchaseUnitName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("UnitCostBase")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<decimal>("UnitCostPerPurchaseUnit")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
@@ -1792,10 +2381,18 @@ namespace BranchPOS.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("DisplayQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("DisplayUnit")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<int>("InventoryItemId")
                         .HasColumnType("integer");
 
-                    b.Property<decimal>("QuantityRequired")
+                    b.Property<decimal>("QuantityRequiredBase")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
@@ -2351,11 +2948,59 @@ namespace BranchPOS.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("BranchPOS.Models.UserSession", "UserSession")
+                        .WithMany()
+                        .HasForeignKey("UserSessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Branch");
 
                     b.Navigation("Terminal");
 
                     b.Navigation("User");
+
+                    b.Navigation("UserSession");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.InventoryAdjustment", b =>
+                {
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "RejectedByUser")
+                        .WithMany()
+                        .HasForeignKey("RejectedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ApprovedByUser");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("RejectedByUser");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.InventoryItem", b =>
@@ -2404,10 +3049,25 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BranchPOS.Models.KitchenRequestDetail", "KitchenRequestDetail")
+                        .WithMany()
+                        .HasForeignKey("KitchenRequestDetailId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.Terminal", "Terminal")
+                        .WithMany()
+                        .HasForeignKey("TerminalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("BranchPOS.Models.InventoryLocation", "ToLocation")
                         .WithMany()
                         .HasForeignKey("ToLocationId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BranchPOS.Models.UserSession", "UserSession")
+                        .WithMany()
+                        .HasForeignKey("UserSessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Branch");
 
@@ -2417,7 +3077,13 @@ namespace BranchPOS.Migrations
 
                     b.Navigation("InventoryItem");
 
+                    b.Navigation("KitchenRequestDetail");
+
+                    b.Navigation("Terminal");
+
                     b.Navigation("ToLocation");
+
+                    b.Navigation("UserSession");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.InventoryStock", b =>
@@ -2460,16 +3126,51 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BranchPOS.Models.UserSession", "CreatedBySession")
+                        .WithMany()
+                        .HasForeignKey("CreatedBySessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.Terminal", "CreatedByTerminal")
+                        .WithMany()
+                        .HasForeignKey("CreatedByTerminalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "DispatchedByUser")
+                        .WithMany()
+                        .HasForeignKey("DispatchedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "KitchenLocation")
+                        .WithMany()
+                        .HasForeignKey("KitchenLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BranchPOS.Models.ApplicationUser", "RequestedByUser")
                         .WithMany()
                         .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("ApprovedByUser");
 
                     b.Navigation("Branch");
 
+                    b.Navigation("CreatedBySession");
+
+                    b.Navigation("CreatedByTerminal");
+
+                    b.Navigation("DispatchedByUser");
+
+                    b.Navigation("KitchenLocation");
+
                     b.Navigation("RequestedByUser");
+
+                    b.Navigation("ReviewedByUser");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.KitchenRequestDetail", b =>
@@ -2480,6 +3181,11 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "KitchenLocation")
+                        .WithMany()
+                        .HasForeignKey("KitchenLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BranchPOS.Models.KitchenRequest", "KitchenRequest")
                         .WithMany("Details")
                         .HasForeignKey("KitchenRequestId")
@@ -2487,6 +3193,8 @@ namespace BranchPOS.Migrations
                         .IsRequired();
 
                     b.Navigation("InventoryItem");
+
+                    b.Navigation("KitchenLocation");
 
                     b.Navigation("KitchenRequest");
                 });
@@ -2583,6 +3291,100 @@ namespace BranchPOS.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PreparationBatch", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "OutputInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("OutputInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.PreparationRecipe", "PreparationRecipe")
+                        .WithMany()
+                        .HasForeignKey("PreparationRecipeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.Terminal", "Terminal")
+                        .WithMany()
+                        .HasForeignKey("TerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BranchPOS.Models.UserSession", "UserSession")
+                        .WithMany()
+                        .HasForeignKey("UserSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Location");
+
+                    b.Navigation("OutputInventoryItem");
+
+                    b.Navigation("PreparationRecipe");
+
+                    b.Navigation("Terminal");
+
+                    b.Navigation("UserSession");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PreparationRecipe", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "OutputInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("OutputInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("OutputInventoryItem");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PreparationRecipeIngredient", b =>
+                {
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.PreparationRecipe", "PreparationRecipe")
+                        .WithMany("Ingredients")
+                        .HasForeignKey("PreparationRecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("PreparationRecipe");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Product", b =>
@@ -2895,6 +3697,11 @@ namespace BranchPOS.Migrations
             modelBuilder.Entity("BranchPOS.Models.Order", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PreparationRecipe", b =>
+                {
+                    b.Navigation("Ingredients");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Product", b =>

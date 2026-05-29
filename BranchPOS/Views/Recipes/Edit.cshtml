@@ -1,31 +1,117 @@
 @model BranchPOS.Models.Recipe
+@using BranchPOS.Models
 @using Microsoft.AspNetCore.Mvc.Rendering
 @{
-    ViewData["Title"] = "Edit Recipe";
+    ViewData["Title"] = "Edit Product Recipe";
     var products = (IEnumerable<SelectListItem>)ViewBag.Products;
-    var items = (IEnumerable<SelectListItem>)ViewBag.InventoryItems;
+    var inventoryItems = (IEnumerable<InventoryItem>?)ViewBag.InventoryItemModels ?? [];
 }
 
-<h1>Edit Recipe</h1>
-<form method="post">
+<h1>Edit Product Recipe</h1>
+<form method="post" id="recipeForm">
     <input type="hidden" asp-for="Id" />
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="mb-3">
         <label asp-for="ProductId" class="form-label">Product</label>
         <select asp-for="ProductId" asp-items="products" class="form-select"><option value="">Select product</option></select>
+        <span asp-validation-for="ProductId" class="text-danger"></span>
     </div>
-    <table class="table">
-        <thead><tr><th>Inventory item</th><th>Quantity required per unit</th></tr></thead>
-        <tbody>
+
+    <h2 class="h4">Ingredients</h2>
+    <table class="table align-middle">
+        <thead><tr><th>Inventory item</th><th>Required quantity per product</th><th>Unit</th><th></th></tr></thead>
+        <tbody id="ingredientRows">
         @for (var i = 0; i < Model.Ingredients.Count; i++)
         {
-            <tr>
-                <td><select asp-for="Ingredients[i].InventoryItemId" asp-items="items" class="form-select"><option value="">Select item</option></select></td>
-                <td><input asp-for="Ingredients[i].QuantityRequired" class="form-control" type="number" step="0.001" /></td>
+            <tr class="ingredient-row">
+                <td>
+                    <select name="Ingredients[@i].InventoryItemId" class="form-select inventory-item-select">
+                        <option value="">Select item</option>
+                        @foreach (var item in inventoryItems)
+                        {
+                            <option value="@item.Id" selected="@(Model.Ingredients[i].InventoryItemId == item.Id)" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
+                        }
+                    </select>
+                    <span asp-validation-for="Ingredients[i].InventoryItemId" class="text-danger"></span>
+                </td>
+                <td>
+                    <input name="Ingredients[@i].QuantityRequiredBase" value="@Model.Ingredients[i].QuantityRequiredBase" class="form-control quantity-input" type="number" step="0.001" />
+                    <span asp-validation-for="Ingredients[i].QuantityRequiredBase" class="text-danger"></span>
+                </td>
+                <td><span class="base-unit-label text-muted"></span></td>
+                <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
             </tr>
         }
         </tbody>
     </table>
+    <div class="mb-3">
+        <button class="btn btn-outline-primary" type="button" id="addIngredientButton">Add ingredient</button>
+    </div>
     <button class="btn btn-primary" type="submit">Save recipe</button>
     <a class="btn btn-secondary" asp-action="Index">Cancel</a>
 </form>
+
+<template id="ingredientRowTemplate">
+    <tr class="ingredient-row">
+        <td>
+            <select class="form-select inventory-item-select">
+                <option value="">Select item</option>
+                @foreach (var item in inventoryItems)
+                {
+                    <option value="@item.Id" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
+                }
+            </select>
+        </td>
+        <td><input class="form-control quantity-input" type="number" step="0.001" /></td>
+        <td><span class="base-unit-label text-muted"></span></td>
+        <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
+    </tr>
+</template>
+
+@section Scripts {
+    <script>
+        (() => {
+            const rows = document.getElementById('ingredientRows');
+            const template = document.getElementById('ingredientRowTemplate');
+            const productSelect = document.getElementById('ProductId');
+
+            const updateBaseUnitLabel = row => {
+                const option = row.querySelector('.inventory-item-select')?.selectedOptions[0];
+                row.querySelector('.base-unit-label').textContent = option?.value ? option.dataset.baseUnit || '' : '';
+            };
+
+            const refreshRowNames = () => {
+                rows.querySelectorAll('.ingredient-row').forEach((row, index) => {
+                    row.querySelector('.inventory-item-select').name = `Ingredients[${index}].InventoryItemId`;
+                    row.querySelector('.quantity-input').name = `Ingredients[${index}].QuantityRequiredBase`;
+                    row.querySelector('.remove-row-button').disabled = rows.querySelectorAll('.ingredient-row').length === 1;
+                });
+            };
+
+            const wireRow = row => {
+                row.querySelector('.inventory-item-select')?.addEventListener('change', () => updateBaseUnitLabel(row));
+                row.querySelector('.remove-row-button')?.addEventListener('click', () => {
+                    row.remove();
+                    refreshRowNames();
+                });
+                updateBaseUnitLabel(row);
+            };
+
+            document.getElementById('addIngredientButton')?.addEventListener('click', () => {
+                const row = template.content.firstElementChild.cloneNode(true);
+                rows.appendChild(row);
+                wireRow(row);
+                refreshRowNames();
+            });
+
+            productSelect?.addEventListener('change', () => {
+                const productId = productSelect.value;
+                const url = productId ? `@Url.Action("Edit", "Recipes")?productId=${encodeURIComponent(productId)}` : '@Url.Action("Edit", "Recipes")';
+                window.location.href = url;
+            });
+
+            rows.querySelectorAll('.ingredient-row').forEach(wireRow);
+            refreshRowNames();
+        })();
+    </script>
+}

@@ -20,7 +20,7 @@
             <td>@order.Cashier?.Email</td>
             <td>@order.Customer?.Name</td>
             <td>@order.CreatedAt.ToLocalTime()</td>
-            <td>@order.TotalAmount.ToString("0.00")</td>
+            <td>@CurrencyFormatter.Format(order.TotalAmount)</td>
             <td>@string.Join(", ", order.Items.Select(x => $"{x.ProductNameSnapshot} x{x.Quantity}"))</td>
             <td>
                 @if (order.OrderStatus == BranchPOS.Models.OrderStatus.Completed)

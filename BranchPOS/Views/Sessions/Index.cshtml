@@ -23,7 +23,7 @@
             <p class="mb-1">Branch: @Model.ActiveSession.Branch?.Name</p>
             <p class="mb-1">Terminal: @Model.ActiveSession.TerminalName (@Model.ActiveSession.TerminalCode)</p>
             <p class="mb-1">Started: @Model.ActiveSession.StartedAt.ToLocalTime()</p>
-            <p class="mb-1">Opening cash: @Model.ActiveSession.OpeningCashAmount.ToString("0.00")</p>
+            <p class="mb-1">Opening cash: @CurrencyFormatter.Format(Model.ActiveSession.OpeningCashAmount)</p>
             <div class="d-flex gap-2 mt-3">
                 <a class="btn btn-primary" asp-controller="Home" asp-action="Index">Continue session / shift</a>
                 @if (canViewSummary)

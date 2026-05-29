@@ -41,56 +41,19 @@
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3 app-navbar">
+        <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow app-navbar">
             <div class="container-fluid">
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <button id="sidebarToggle" class="btn btn-outline-secondary btn-sm me-2" type="button" aria-controls="appSidebar" aria-expanded="true">Menu</button>
+                }
                 <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">BranchPOS</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            @if (!isAdmin)
-                            {
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Sessions" asp-action="Index">Session</a></li>
-                            }
-                            @if (isStockManager)
-                            {
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Products" asp-action="Index">Products</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Kitchen">Kitchen Inventory</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="KitchenRequests" asp-action="Index">Kitchen Requests</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Recipes" asp-action="Index">Recipe Management</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Movements">Inventory Movements</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="OperationalExpenses" asp-action="Index">Operational Expenses</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Index">Inventory Reports</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="InventoryReports" asp-action="Profit">Profit Report</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Purchases" asp-action="Index">Purchases</a></li>
-                            }
-                            @if (isCashier)
-                            {
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Orders" asp-action="Create">Create Order</a></li>
-                            }
-                            @if (isAdmin)
-                            {
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Home" asp-action="Index">Dashboard</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Users" asp-action="Index">Users</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Branches" asp-action="Index">Branches</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Sessions" asp-action="PendingCloseApprovals">Session Approvals</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Categories" asp-action="Index">Categories</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Suppliers" asp-action="Index">Suppliers</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Terminals" asp-action="Index">Terminals</a></li>
-                                <li class="nav-item"><a class="nav-link text-dark" asp-controller="Reports" asp-action="Index">Reports</a></li>
-                            }
-                        }
-                    </ul>
-                    <ul class="navbar-nav">
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-end">
+                    <ul class="navbar-nav align-items-sm-center">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             @if (isAdmin)
@@ -126,11 +89,70 @@
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            <partial name="_UserMessages" />
-            @RenderBody()
-        </main>
+    <div class="app-shell">
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <aside id="appSidebar" class="app-sidebar border-end" aria-label="Main navigation">
+                <div class="app-sidebar-header">
+                    <div class="fw-semibold">
+                        @(isAdmin ? "Admin" : isStockManager ? "Stock" : isCashier ? "Cashier" : "Menu")
+                    </div>
+                    <div class="text-muted small">Navigation</div>
+                </div>
+                <nav class="app-sidebar-nav">
+                    <a class="app-sidebar-link" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                    @if (!isAdmin)
+                    {
+                        <a class="app-sidebar-link" asp-controller="Sessions" asp-action="Index">Session</a>
+                    }
+                    @if (isStockManager)
+                    {
+                        <div class="app-sidebar-label">Catalog</div>
+                        <a class="app-sidebar-link" asp-controller="Products" asp-action="Index">Products</a>
+                        <a class="app-sidebar-link" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a>
+                        <a class="app-sidebar-link" asp-controller="Recipes" asp-action="Index">Product Recipes</a>
+                        <a class="app-sidebar-link" asp-controller="PreparationRecipes" asp-action="Index">Prepared Inventory</a>
+
+                        <div class="app-sidebar-label">Stock</div>
+                        <a class="app-sidebar-link" asp-controller="Purchases" asp-action="Index">Purchases</a>
+                        <a class="app-sidebar-link" asp-controller="PreparedStock" asp-action="Add">Add Prepared</a>
+                        <a class="app-sidebar-link" asp-controller="KitchenRequests" asp-action="Index">Kitchen Requests</a>
+                        <a class="app-sidebar-link" asp-controller="InventoryAdjustments" asp-action="Index">Inventory Adjustments</a>
+                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a>
+                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Kitchen">Kitchen Inventory</a>
+                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Movements">Inventory Movements</a>
+
+                        <div class="app-sidebar-label">Reports</div>
+                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Index">Inventory Reports</a>
+                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Profit">Profit Report</a>
+                        <a class="app-sidebar-link" asp-controller="OperationalExpenses" asp-action="Index">Operational Expenses</a>
+                    }
+                    @if (isCashier)
+                    {
+                        <div class="app-sidebar-label">POS</div>
+                        <a class="app-sidebar-link" asp-controller="Orders" asp-action="Create">Create Order</a>
+                    }
+                    @if (isAdmin)
+                    {
+                        <div class="app-sidebar-label">Administration</div>
+                        <a class="app-sidebar-link" asp-controller="Home" asp-action="Index">Dashboard</a>
+                        <a class="app-sidebar-link" asp-controller="Users" asp-action="Index">Users</a>
+                        <a class="app-sidebar-link" asp-controller="Branches" asp-action="Index">Branches</a>
+                        <a class="app-sidebar-link" asp-controller="Sessions" asp-action="PendingCloseApprovals">Session Approvals</a>
+                        <a class="app-sidebar-link" asp-controller="Categories" asp-action="Index">Categories</a>
+                        <a class="app-sidebar-link" asp-controller="Suppliers" asp-action="Index">Suppliers</a>
+                        <a class="app-sidebar-link" asp-controller="Terminals" asp-action="Index">Terminals</a>
+                        <a class="app-sidebar-link" asp-controller="Reports" asp-action="Index">Reports</a>
+                    }
+                </nav>
+            </aside>
+        }
+        <div class="app-content">
+            <main role="main" class="container-fluid pb-3 pt-3">
+                <partial name="_UserMessages" />
+                @RenderBody()
+            </main>
+        </div>
     </div>
 
     <footer class="border-top footer text-muted">
@@ -141,6 +163,29 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <script>
+            (() => {
+                const key = 'BranchPOS.SidebarCollapsed';
+                const button = document.getElementById('sidebarToggle');
+                const sidebar = document.getElementById('appSidebar');
+                if (!button || !sidebar) return;
+
+                const setCollapsed = collapsed => {
+                    document.body.classList.toggle('sidebar-collapsed', collapsed);
+                    button.setAttribute('aria-expanded', (!collapsed).toString());
+                    button.textContent = collapsed ? 'Menu' : 'Close';
+                    localStorage.setItem(key, collapsed ? 'true' : 'false');
+                };
+
+                setCollapsed(localStorage.getItem(key) === 'true');
+                button.addEventListener('click', () => {
+                    setCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+                });
+            })();
+        </script>
+    }
     @if (isAdmin)
     {
         <script>

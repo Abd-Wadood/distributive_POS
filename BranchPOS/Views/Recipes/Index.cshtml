@@ -15,7 +15,7 @@
     {
         <tr>
             <td>@recipe.Product?.Name</td>
-            <td>@string.Join(", ", recipe.Ingredients.Select(x => $"{x.InventoryItem?.Name} {x.QuantityRequired:0.###} {x.InventoryItem?.Unit}"))</td>
+            <td>@string.Join(", ", recipe.Ingredients.Select(x => $"{x.InventoryItem?.Name} {x.QuantityRequiredBase:0.###} {x.InventoryItem?.BaseUnit}"))</td>
             <td>@(recipe.IsActive ? "Active" : "Inactive")</td>
             <td class="text-end"><a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-productId="@recipe.ProductId">Edit</a></td>
         </tr>

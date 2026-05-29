@@ -88,7 +88,7 @@ public class AdminDashboardService : IAdminDashboardService
 
         var lowStockGroups = await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.Quantity <= x.InventoryItem!.ReorderLevel)
+            .Where(x => x.QuantityBase <= x.InventoryItem!.ReorderLevel)
             .GroupBy(x => x.BranchId)
             .Select(x => new CountByBranchRow { BranchId = x.Key, Count = x.Count() })
             .ToListAsync(cancellationToken);
@@ -320,17 +320,17 @@ public class AdminDashboardService : IAdminDashboardService
     {
         return await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.Quantity <= x.InventoryItem!.ReorderLevel)
-            .OrderBy(x => x.InventoryItem!.ReorderLevel == 0 ? 0 : x.Quantity / x.InventoryItem.ReorderLevel)
-            .ThenBy(x => x.Quantity)
+            .Where(x => x.QuantityBase <= x.InventoryItem!.ReorderLevel)
+            .OrderBy(x => x.InventoryItem!.ReorderLevel == 0 ? 0 : x.QuantityBase / x.InventoryItem.ReorderLevel)
+            .ThenBy(x => x.QuantityBase)
             .Select(x => new InventoryRiskViewModel
             {
                 BranchName = x.Branch == null ? "" : x.Branch.Name,
                 IngredientName = x.InventoryItem == null ? "" : $"{x.InventoryItem.Name} ({x.InventoryLocation!.Name})",
-                UnitType = x.InventoryItem == null ? "" : x.InventoryItem.Unit,
-                CurrentQuantity = x.Quantity,
+                UnitType = x.InventoryItem == null ? "" : x.InventoryItem.BaseUnit,
+                CurrentQuantity = x.QuantityBase,
                 MinimumStockLevel = x.InventoryItem == null ? 0 : x.InventoryItem.ReorderLevel,
-                Severity = x.Quantity <= 0 ? "Critical" : "Warning"
+                Severity = x.QuantityBase <= 0 ? "Critical" : "Warning"
             })
             .Take(_options.MaxInventoryRisks)
             .ToListAsync(cancellationToken);

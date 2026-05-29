@@ -6,7 +6,8 @@
 }
 
 <h1>New Kitchen Request</h1>
-<form method="post">
+<form asp-action="Create" method="post">
+    @Html.AntiForgeryToken()
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="mb-3">
         <label asp-for="Note" class="form-label"></label>

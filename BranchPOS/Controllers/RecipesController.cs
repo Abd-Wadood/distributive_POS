@@ -13,11 +13,13 @@ public class RecipesController : Controller
 {
     private readonly AppDbContext _context;
     private readonly IBranchContextService _branchContextService;
+    private readonly IPosMenuCacheInvalidator _posMenuCacheInvalidator;
 
-    public RecipesController(AppDbContext context, IBranchContextService branchContextService)
+    public RecipesController(AppDbContext context, IBranchContextService branchContextService, IPosMenuCacheInvalidator posMenuCacheInvalidator)
     {
         _context = context;
         _branchContextService = branchContextService;
+        _posMenuCacheInvalidator = posMenuCacheInvalidator;
     }
 
     public async Task<IActionResult> Index()
@@ -41,11 +43,12 @@ public class RecipesController : Controller
         {
             recipe = await _context.Recipes
                 .Include(x => x.Ingredients)
+                .ThenInclude(x => x.InventoryItem)
                 .FirstOrDefaultAsync(x => x.BranchId == branchId && x.ProductId == productId.Value && x.IsActive);
         }
 
         recipe ??= new Recipe { BranchId = branchId, ProductId = productId ?? 0 };
-        while (recipe.Ingredients.Count < 8)
+        if (recipe.Ingredients.Count == 0)
         {
             recipe.Ingredients.Add(new RecipeIngredient());
         }
@@ -58,7 +61,7 @@ public class RecipesController : Controller
     public async Task<IActionResult> Edit(Recipe model)
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        model.Ingredients = model.Ingredients.Where(x => x.InventoryItemId > 0 && x.QuantityRequired > 0).ToList();
+        model.Ingredients = NormalizeIngredients(model.Ingredients);
         if (model.ProductId <= 0)
         {
             ModelState.AddModelError(nameof(model.ProductId), "Product is required.");
@@ -70,6 +73,7 @@ public class RecipesController : Controller
         if (!ModelState.IsValid)
         {
             await PopulateListsAsync(branchId);
+            EnsureOneIngredientRow(model);
             return View(model);
         }
 
@@ -79,12 +83,12 @@ public class RecipesController : Controller
             return NotFound();
         }
 
-        var inventoryItemIds = model.Ingredients.Select(x => x.InventoryItemId).Distinct().ToList();
-        var validInventoryItemCount = await _context.InventoryItems.CountAsync(x => x.BranchId == branchId && x.IsActive && inventoryItemIds.Contains(x.Id));
-        if (validInventoryItemCount != inventoryItemIds.Count)
+        var inventoryItems = await LoadValidInventoryItemsAsync(branchId, model.Ingredients.Select(x => x.InventoryItemId));
+        if (inventoryItems.Count != model.Ingredients.Select(x => x.InventoryItemId).Distinct().Count())
         {
             ModelState.AddModelError(string.Empty, "One or more recipe inventory items do not belong to the active branch.");
             await PopulateListsAsync(branchId);
+            EnsureOneIngredientRow(model);
             return View(model);
         }
 
@@ -104,11 +108,14 @@ public class RecipesController : Controller
             recipe.Ingredients.Add(new RecipeIngredient
             {
                 InventoryItemId = ingredient.Key,
-                QuantityRequired = ingredient.Sum(x => x.QuantityRequired)
+                QuantityRequiredBase = ingredient.Sum(x => x.QuantityRequiredBase),
+                DisplayQuantity = ingredient.Sum(x => x.QuantityRequiredBase),
+                DisplayUnit = inventoryItems[ingredient.Key].BaseUnit
             });
         }
 
         await _context.SaveChangesAsync();
+        _posMenuCacheInvalidator.Invalidate();
         return RedirectToAction(nameof(Index));
     }
 
@@ -122,7 +129,60 @@ public class RecipesController : Controller
         ViewBag.InventoryItems = await _context.InventoryItems
             .Where(x => x.BranchId == branchId && x.IsActive)
             .OrderBy(x => x.Name)
-            .Select(x => new SelectListItem($"{x.Name} ({x.Unit})", x.Id.ToString()))
+            .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();
+        ViewBag.InventoryItemModels = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive)
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+    }
+
+    private List<RecipeIngredient> NormalizeIngredients(List<RecipeIngredient> ingredients)
+    {
+        var normalized = new List<RecipeIngredient>();
+        for (var i = 0; i < ingredients.Count; i++)
+        {
+            var ingredient = ingredients[i];
+            var isEmpty = ingredient.InventoryItemId <= 0 && ingredient.QuantityRequiredBase <= 0;
+            if (isEmpty)
+            {
+                continue;
+            }
+
+            if (ingredient.InventoryItemId <= 0)
+            {
+                ModelState.AddModelError($"Ingredients[{i}].InventoryItemId", "Inventory item is required.");
+            }
+
+            if (ingredient.QuantityRequiredBase <= 0)
+            {
+                ModelState.AddModelError($"Ingredients[{i}].QuantityRequiredBase", "Required quantity must be greater than zero.");
+            }
+
+            normalized.Add(ingredient);
+        }
+
+        if (normalized.GroupBy(x => x.InventoryItemId).Any(x => x.Key > 0 && x.Count() > 1))
+        {
+            ModelState.AddModelError(string.Empty, "Duplicate inventory item rows are not allowed.");
+        }
+
+        return normalized;
+    }
+
+    private async Task<Dictionary<int, InventoryItem>> LoadValidInventoryItemsAsync(int branchId, IEnumerable<int> inventoryItemIds)
+    {
+        var ids = inventoryItemIds.Where(x => x > 0).Distinct().ToList();
+        return await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive && ids.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+    }
+
+    private static void EnsureOneIngredientRow(Recipe recipe)
+    {
+        if (recipe.Ingredients.Count == 0)
+        {
+            recipe.Ingredients.Add(new RecipeIngredient());
+        }
     }
 }

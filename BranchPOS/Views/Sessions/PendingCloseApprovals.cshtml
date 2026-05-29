@@ -48,16 +48,16 @@ else
                             <div class="small text-muted">@approval.TerminalCode</div>
                         </td>
                         <td>@approval.RequestedAt?.ToLocalTime()</td>
-                        <td>@approval.ExpectedClosingCash.ToString("0.00")</td>
-                        <td>@approval.CountedClosingCash.ToString("0.00")</td>
+                        <td>@CurrencyFormatter.Format(approval.ExpectedClosingCash)</td>
+                        <td>@CurrencyFormatter.Format(approval.CountedClosingCash)</td>
                         <td>
                             <span class="badge @(approval.Difference == 0 ? "text-bg-success" : "text-bg-warning")">
-                                @approval.Difference.ToString("0.00")
+                                @CurrencyFormatter.Format(approval.Difference)
                             </span>
                         </td>
                         <td>
                             @approval.CompletedOrdersCount
-                            <div class="small text-muted">@approval.TotalSalesAmount.ToString("0.00") sales</div>
+                            <div class="small text-muted">@CurrencyFormatter.Format(approval.TotalSalesAmount) sales</div>
                         </td>
                         <td class="text-end">
                             <div class="d-flex justify-content-end gap-2">

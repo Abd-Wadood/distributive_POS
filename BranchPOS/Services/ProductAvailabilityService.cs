@@ -34,7 +34,7 @@ public class ProductAvailabilityService : IProductAvailabilityService
         var requirements = await _context.RecipeIngredients
             .AsNoTracking()
             .Where(x => x.Recipe!.BranchId == branchId && x.Recipe.ProductId == productId && x.Recipe.IsActive && x.Recipe.Product!.IsActive)
-            .Select(x => new InventoryRequirement(x.InventoryItemId, x.QuantityRequired))
+            .Select(x => new InventoryRequirement(x.InventoryItemId, x.QuantityRequiredBase))
             .ToListAsync(cancellationToken);
 
         if (requirements.Count == 0)
@@ -47,8 +47,8 @@ public class ProductAvailabilityService : IProductAvailabilityService
         var inventory = await _context.InventoryStocks
             .AsNoTracking()
             .Where(x => x.BranchId == branchId && x.InventoryLocationId == kitchenLocationId && inventoryItemIds.Contains(x.InventoryItemId))
-            .Select(x => new { x.InventoryItemId, x.Quantity })
-            .ToDictionaryAsync(x => x.InventoryItemId, x => x.Quantity, cancellationToken);
+            .Select(x => new { x.InventoryItemId, x.QuantityBase })
+            .ToDictionaryAsync(x => x.InventoryItemId, x => x.QuantityBase, cancellationToken);
 
         return requirements.All(x => inventory.TryGetValue(x.InventoryItemId, out var available) && available >= x.QuantityRequired * quantity);
     }
@@ -129,7 +129,7 @@ public class ProductAvailabilityService : IProductAvailabilityService
             .Select(x => new
             {
                 x.Recipe!.ProductId,
-                Requirement = new InventoryRequirement(x.InventoryItemId, x.QuantityRequired)
+                Requirement = new InventoryRequirement(x.InventoryItemId, x.QuantityRequiredBase)
             })
             .ToListAsync(cancellationToken);
 
@@ -178,8 +178,8 @@ public class ProductAvailabilityService : IProductAvailabilityService
         return await _context.InventoryStocks
             .AsNoTracking()
             .Where(x => x.BranchId == branchId && x.InventoryLocationId == kitchenLocationId && inventoryItemIds.Contains(x.InventoryItemId))
-            .Select(x => new { x.InventoryItemId, x.Quantity })
-            .ToDictionaryAsync(x => x.InventoryItemId, x => x.Quantity, cancellationToken);
+            .Select(x => new { x.InventoryItemId, x.QuantityBase })
+            .ToDictionaryAsync(x => x.InventoryItemId, x => x.QuantityBase, cancellationToken);
     }
 
     private static bool CanMakeOne(PosProductMenuItem product, Dictionary<int, decimal> inventory) =>

@@ -40,7 +40,7 @@
             </div>
             <div class="col-md-4">
                 <div class="text-muted small">Opening cash</div>
-                <strong>@Model.Session.OpeningCashAmount.ToString("0.00")</strong>
+                <strong>@CurrencyFormatter.Format(Model.Session.OpeningCashAmount)</strong>
             </div>
             <div class="col-md-4">
                 <div class="text-muted small">Completed orders</div>
@@ -60,7 +60,7 @@
             </div>
             <div class="col-md-4">
                 <div class="text-muted small">System expected cash</div>
-                <strong>@Model.ExpectedClosingCash.ToString("0.00")</strong>
+                <strong>@CurrencyFormatter.Format(Model.ExpectedClosingCash)</strong>
             </div>
         </div>
     </div>
@@ -78,7 +78,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Difference preview</label>
-                <input class="form-control" value="@Model.Difference.ToString("0.00")" readonly />
+                <input class="form-control" value="@CurrencyFormatter.Format(Model.Difference)" readonly />
             </div>
             <div class="col-md-4">
                 <label asp-for="ConfirmationText" class="form-label">Type END to close</label>

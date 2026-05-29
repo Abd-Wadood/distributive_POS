@@ -1,51 +1,204 @@
 @model BranchPOS.ViewModels.PurchaseCreateViewModel
+@using BranchPOS.Models
 @{
     ViewData["Title"] = "New purchase";
+    var inventoryItems = (IEnumerable<InventoryItem>?)ViewBag.PurchaseInventoryItems ?? [];
 }
 
 <h1>New purchase</h1>
-<form method="post">
+<form method="post" id="purchaseForm">
     <input type="hidden" asp-for="IdempotencyKey" />
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="row g-3 mb-3">
         <div class="col-md-4">
-            <label asp-for="SupplierId" class="form-label"></label>
-            <select asp-for="SupplierId" asp-items="Model.Suppliers" class="form-select"></select>
+            <label asp-for="SupplierId" class="form-label">Supplier</label>
+            <select asp-for="SupplierId" asp-items="Model.Suppliers" class="form-select"><option value="">Select supplier</option></select>
+            <span asp-validation-for="SupplierId" class="text-danger"></span>
         </div>
         <div class="col-md-4">
             <label asp-for="InvoiceNumber" class="form-label">Invoice number</label>
             <input asp-for="InvoiceNumber" class="form-control" />
         </div>
     </div>
-    <table class="table">
-        <thead><tr><th>Raw inventory item</th><th>Quantity</th><th>Unit cost</th></tr></thead>
-        <tbody>
+
+    <table class="table align-middle" id="purchaseItemsTable">
+        <thead>
+        <tr>
+            <th>Inventory item</th>
+            <th>Purchase quantity</th>
+            <th>Purchase unit</th>
+            <th>1 purchase unit equals</th>
+            <th>Base quantity</th>
+            <th>Unit cost</th>
+            <th>Total cost</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody id="purchaseRows">
         @for (var i = 0; i < Model.Items.Count; i++)
         {
-            <tr>
+            <tr class="purchase-row">
                 <td>
-                    <select asp-for="Items[i].InventoryItemId" asp-items="Model.InventoryItems" class="form-select">
+                    <select name="Items[@i].InventoryItemId" class="form-select inventory-item-select">
                         <option value="">Select item</option>
+                        @foreach (var item in inventoryItems)
+                        {
+                            <option value="@item.Id"
+                                    selected="@(Model.Items[i].InventoryItemId == item.Id)"
+                                    data-base-unit="@item.BaseUnit"
+                                    data-purchase-unit="@item.PurchaseUnitName"
+                                    data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")">
+                                @item.Name (@item.BaseUnit)
+                            </option>
+                        }
                     </select>
+                    <div class="form-text item-helper"></div>
+                    <span asp-validation-for="Items[i].InventoryItemId" class="text-danger"></span>
                 </td>
-                <td><input asp-for="Items[i].Quantity" class="form-control" /></td>
-                <td><input asp-for="Items[i].UnitCost" class="form-control" /></td>
+                <td>
+                    <input name="Items[@i].PurchaseQuantity" value="@Model.Items[i].PurchaseQuantity" class="form-control purchase-quantity-input" type="number" step="0.001" />
+                    <span asp-validation-for="Items[i].PurchaseQuantity" class="text-danger"></span>
+                </td>
+                <td><input class="form-control purchase-unit-display" type="text" readonly /></td>
+                <td>
+                    <input class="form-control conversion-display" type="text" readonly />
+                    <div class="form-text conversion-helper"></div>
+                </td>
+                <td><output class="base-quantity-output text-muted"></output></td>
+                <td>
+                    <input name="Items[@i].UnitCostPerPurchaseUnit" value="@Model.Items[i].UnitCostPerPurchaseUnit" class="form-control unit-cost-input" type="number" step="0.01" />
+                    <span asp-validation-for="Items[i].UnitCostPerPurchaseUnit" class="text-danger"></span>
+                </td>
+                <td><input class="form-control total-cost-output" type="text" readonly /></td>
+                <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
             </tr>
         }
         </tbody>
     </table>
+
+    <div class="mb-3">
+        <button class="btn btn-outline-primary" type="button" id="addPurchaseRowButton">Add item</button>
+    </div>
     <button type="submit" class="btn btn-primary" id="savePurchaseButton">Save purchase</button>
     <a class="btn btn-secondary" asp-action="Index">Cancel</a>
 </form>
 
+<template id="purchaseRowTemplate">
+    <tr class="purchase-row">
+        <td>
+            <select class="form-select inventory-item-select">
+                <option value="">Select item</option>
+                @foreach (var item in inventoryItems)
+                {
+                    <option value="@item.Id"
+                            data-base-unit="@item.BaseUnit"
+                            data-purchase-unit="@item.PurchaseUnitName"
+                            data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")">
+                        @item.Name (@item.BaseUnit)
+                    </option>
+                }
+            </select>
+            <div class="form-text item-helper"></div>
+        </td>
+        <td><input class="form-control purchase-quantity-input" type="number" step="0.001" /></td>
+        <td><input class="form-control purchase-unit-display" type="text" readonly /></td>
+        <td>
+            <input class="form-control conversion-display" type="text" readonly />
+            <div class="form-text conversion-helper"></div>
+        </td>
+        <td><output class="base-quantity-output text-muted"></output></td>
+        <td><input class="form-control unit-cost-input" type="number" step="0.01" /></td>
+        <td><input class="form-control total-cost-output" type="text" readonly /></td>
+        <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
+    </tr>
+</template>
+
 @section Scripts {
     <script>
-        document.querySelector('form')?.addEventListener('submit', () => {
-            const button = document.getElementById('savePurchaseButton');
-            if (button) {
-                button.disabled = true;
-                button.textContent = 'Processing...';
-            }
-        });
+        (() => {
+            const rows = document.getElementById('purchaseRows');
+            const template = document.getElementById('purchaseRowTemplate');
+
+            const formatDecimal = value => {
+                if (!Number.isFinite(value)) return '';
+                return Number(value.toFixed(3)).toString();
+            };
+
+            const selectedItem = row => row.querySelector('.inventory-item-select')?.selectedOptions[0] ?? null;
+
+            const recalculateRow = row => {
+                const option = selectedItem(row);
+                const baseUnit = option?.dataset.baseUnit || '';
+                const purchaseUnit = option?.dataset.purchaseUnit || '';
+                const conversion = Number(option?.dataset.conversion);
+                const quantity = Number(row.querySelector('.purchase-quantity-input')?.value);
+                const unitCost = Number(row.querySelector('.unit-cost-input')?.value);
+                const itemHelper = row.querySelector('.item-helper');
+                const purchaseUnitDisplay = row.querySelector('.purchase-unit-display');
+                const conversionDisplay = row.querySelector('.conversion-display');
+                const conversionHelper = row.querySelector('.conversion-helper');
+                const baseQuantityOutput = row.querySelector('.base-quantity-output');
+                const totalCostOutput = row.querySelector('.total-cost-output');
+
+                if (!option?.value) {
+                    itemHelper.textContent = '';
+                    purchaseUnitDisplay.value = '';
+                    conversionDisplay.value = '';
+                    conversionHelper.textContent = '';
+                    baseQuantityOutput.textContent = '';
+                    totalCostOutput.value = '';
+                    return;
+                }
+
+                itemHelper.textContent = `Base unit: ${baseUnit}`;
+                purchaseUnitDisplay.value = purchaseUnit;
+                conversionDisplay.value = Number.isFinite(conversion) ? `${formatDecimal(conversion)} ${baseUnit}` : '';
+                conversionHelper.textContent = Number.isFinite(conversion) ? `1 ${purchaseUnit} = ${formatDecimal(conversion)} ${baseUnit}` : '';
+
+                const baseQuantity = quantity > 0 && conversion > 0 ? quantity * conversion : NaN;
+                const totalCost = quantity > 0 && unitCost > 0 ? quantity * unitCost : NaN;
+                baseQuantityOutput.textContent = Number.isFinite(baseQuantity) ? `${formatDecimal(baseQuantity)} ${baseUnit}` : '';
+                totalCostOutput.value = Number.isFinite(totalCost) ? Number(totalCost.toFixed(2)).toString() : '';
+            };
+
+            const refreshRowNames = () => {
+                rows.querySelectorAll('.purchase-row').forEach((row, index) => {
+                    row.querySelector('.inventory-item-select').name = `Items[${index}].InventoryItemId`;
+                    row.querySelector('.purchase-quantity-input').name = `Items[${index}].PurchaseQuantity`;
+                    row.querySelector('.unit-cost-input').name = `Items[${index}].UnitCostPerPurchaseUnit`;
+                    row.querySelector('.remove-row-button').disabled = rows.querySelectorAll('.purchase-row').length === 1;
+                });
+            };
+
+            const wireRow = row => {
+                row.querySelector('.inventory-item-select')?.addEventListener('change', () => recalculateRow(row));
+                row.querySelector('.purchase-quantity-input')?.addEventListener('input', () => recalculateRow(row));
+                row.querySelector('.unit-cost-input')?.addEventListener('input', () => recalculateRow(row));
+                row.querySelector('.remove-row-button')?.addEventListener('click', () => {
+                    row.remove();
+                    refreshRowNames();
+                });
+                recalculateRow(row);
+            };
+
+            const addPurchaseRow = () => {
+                const row = template.content.firstElementChild.cloneNode(true);
+                rows.appendChild(row);
+                wireRow(row);
+                refreshRowNames();
+            };
+
+            document.getElementById('addPurchaseRowButton')?.addEventListener('click', addPurchaseRow);
+            rows.querySelectorAll('.purchase-row').forEach(wireRow);
+            refreshRowNames();
+
+            document.getElementById('purchaseForm')?.addEventListener('submit', () => {
+                const button = document.getElementById('savePurchaseButton');
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Processing...';
+                }
+            });
+        })();
     </script>
 }

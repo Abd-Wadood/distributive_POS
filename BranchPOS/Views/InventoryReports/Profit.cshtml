@@ -12,9 +12,24 @@
 
 <table class="table table-striped w-auto">
     <tbody>
-        <tr><th>Sales Revenue</th><td>@Model.SalesRevenue.ToString("0.00")</td></tr>
-        <tr><th>Ingredient Cost</th><td>@Model.IngredientCost.ToString("0.00")</td></tr>
-        <tr><th>Operational Expenses</th><td>@Model.OperationalExpenses.ToString("0.00")</td></tr>
-        <tr><th>Net Profit</th><td>@Model.NetProfit.ToString("0.00")</td></tr>
+        <tr><th>Sales Revenue</th><td>@CurrencyFormatter.Format(Model.SalesRevenue)</td></tr>
+        <tr><th>Ingredient Cost</th><td>@CurrencyFormatter.Format(Model.IngredientCost)</td></tr>
+        <tr><th>Inventory Loss / Wastage</th><td>@CurrencyFormatter.Format(Model.InventoryLoss)</td></tr>
+        <tr><th>Operational Expenses</th><td>@CurrencyFormatter.Format(Model.OperationalExpenses)</td></tr>
+        <tr><th>Net Profit</th><td>@CurrencyFormatter.Format(Model.NetProfit)</td></tr>
+    </tbody>
+</table>
+
+<h2 class="h5 mt-4">Inventory Loss Breakdown</h2>
+<table class="table table-sm table-striped w-auto">
+    <tbody>
+        <tr><th>Stock Room Waste Cost</th><td>@CurrencyFormatter.Format(Model.StockRoomWasteCost)</td></tr>
+        <tr><th>Kitchen Waste Cost</th><td>@CurrencyFormatter.Format(Model.KitchenWasteCost)</td></tr>
+        <tr><th>Missing Stock Cost</th><td>@CurrencyFormatter.Format(Model.MissingStockCost)</td></tr>
+        <tr><th>Expired Stock Cost</th><td>@CurrencyFormatter.Format(Model.ExpiredStockCost)</td></tr>
+        <tr><th>Damaged Stock Cost</th><td>@CurrencyFormatter.Format(Model.DamagedStockCost)</td></tr>
+        <tr><th>Spillage Cost</th><td>@CurrencyFormatter.Format(Model.SpillageCost)</td></tr>
+        <tr><th>Correction Increase Total</th><td>@CurrencyFormatter.Format(Model.CorrectionIncreaseTotal)</td></tr>
+        <tr><th>Correction Decrease Total</th><td>@CurrencyFormatter.Format(Model.CorrectionDecreaseTotal)</td></tr>
     </tbody>
 </table>

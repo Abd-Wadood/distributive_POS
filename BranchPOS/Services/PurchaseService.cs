@@ -12,13 +12,15 @@ public class PurchaseService : IPurchaseService
     private readonly AppDbContext _context;
     private readonly IBranchContextService _branchContextService;
     private readonly IIdempotencyService _idempotencyService;
+    private readonly IInventoryTransactionService _inventoryTransactionService;
     private const decimal MaxPurchaseItemQuantity = 1_000_000m;
 
-    public PurchaseService(AppDbContext context, IBranchContextService branchContextService, IIdempotencyService idempotencyService)
+    public PurchaseService(AppDbContext context, IBranchContextService branchContextService, IIdempotencyService idempotencyService, IInventoryTransactionService inventoryTransactionService)
     {
         _context = context;
         _branchContextService = branchContextService;
         _idempotencyService = idempotencyService;
+        _inventoryTransactionService = inventoryTransactionService;
     }
 
     public async Task<List<Purchase>> GetPurchasesAsync(CancellationToken cancellationToken = default)
@@ -45,12 +47,40 @@ public class PurchaseService : IPurchaseService
             throw new BusinessException("Terminal is not registered. Register this terminal before creating purchases.");
         }
 
-        if (dto.Items.Count == 0 || dto.Items.Any(x => x.InventoryItemId <= 0 || x.Quantity <= 0 || x.UnitCost < 0))
+        dto.InvoiceNumber = string.IsNullOrWhiteSpace(dto.InvoiceNumber) ? null : dto.InvoiceNumber.Trim();
+
+        if (dto.SupplierId <= 0)
+        {
+            throw new PosValidationException("Supplier is required.");
+        }
+
+        if (!await _context.Suppliers.AnyAsync(x => x.Id == dto.SupplierId, cancellationToken))
+        {
+            throw new BusinessException("Selected supplier was not found.");
+        }
+
+        if (dto.InvoiceNumber is not null &&
+            await _context.Purchases.AnyAsync(x => x.SupplierId == dto.SupplierId && x.InvoiceNumber == dto.InvoiceNumber, cancellationToken))
+        {
+            throw new BusinessException("This supplier invoice number has already been used.");
+        }
+
+        if (dto.Items.Count == 0)
+        {
+            throw new PosValidationException("Purchase must contain at least one item.");
+        }
+
+        if (dto.Items.Any(x => x.InventoryItemId <= 0 || x.PurchaseQuantity <= 0 || x.UnitCostPerPurchaseUnit <= 0))
         {
             throw new PosValidationException("Purchase must contain valid item quantities and costs.");
         }
 
-        if (dto.Items.Any(x => x.Quantity > MaxPurchaseItemQuantity))
+        if (dto.Items.GroupBy(x => x.InventoryItemId).Any(x => x.Count() > 1))
+        {
+            throw new PosValidationException("Duplicate inventory items are not allowed in the same purchase.");
+        }
+
+        if (dto.Items.Any(x => x.PurchaseQuantity > MaxPurchaseItemQuantity))
         {
             throw new PosValidationException("Purchase quantity is too large.");
         }
@@ -65,7 +95,7 @@ public class PurchaseService : IPurchaseService
             dto.TerminalId,
             dto.SupplierId,
             dto.InvoiceNumber,
-                Items = dto.Items.OrderBy(x => x.InventoryItemId).Select(x => new { x.InventoryItemId, x.Quantity, x.UnitCost })
+                Items = dto.Items.OrderBy(x => x.InventoryItemId).Select(x => new { x.InventoryItemId, x.PurchaseQuantity, x.PurchaseUnitName, x.ConversionFactorToBase, x.UnitCostPerPurchaseUnit, x.TotalCost })
         });
         var idempotency = await _idempotencyService.BeginAsync("PurchaseCreate", dto.IdempotencyKey, idempotencyHash, dto.PerformedByUserId, dto.BranchId, dto.TerminalId, cancellationToken);
         if (!idempotency.IsOwner)
@@ -85,15 +115,61 @@ public class PurchaseService : IPurchaseService
         }
 
         var inventoryItemIds = dto.Items.Select(x => x.InventoryItemId).Distinct().ToList();
-        var validInventoryItemIds = await _context.InventoryItems
+        var validInventoryItems = await _context.InventoryItems
             .Where(x => x.BranchId == dto.BranchId && x.IsActive && inventoryItemIds.Contains(x.Id))
-            .Select(x => x.Id)
-            .ToListAsync(cancellationToken);
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
 
-        if (validInventoryItemIds.Count != inventoryItemIds.Count)
+        if (validInventoryItems.Count != inventoryItemIds.Count)
         {
             throw new BusinessException("Selected inventory item does not belong to the active branch session.");
         }
+
+        if (validInventoryItems.Values.Any(x => x.IsPreparedItem))
+        {
+            throw new BusinessException("Prepared inventory items must be produced through preparation batches, not supplier purchases.");
+        }
+
+        var purchaseLines = dto.Items.Select(item =>
+        {
+            var inventoryItem = validInventoryItems[item.InventoryItemId];
+            var purchaseUnitName = string.IsNullOrWhiteSpace(item.PurchaseUnitName)
+                ? inventoryItem.PurchaseUnitName?.Trim()
+                : item.PurchaseUnitName.Trim();
+            if (string.IsNullOrWhiteSpace(purchaseUnitName))
+            {
+                throw new PosValidationException($"Default purchase unit is not configured for {inventoryItem.Name}. Edit the inventory item before purchasing it.");
+            }
+
+            var conversionFactor = ResolveConversionFactor(inventoryItem, purchaseUnitName, item.ConversionFactorToBase ?? inventoryItem.DefaultConversionFactorToBase);
+            if (conversionFactor <= 0)
+            {
+                throw new PosValidationException($"Conversion factor must be greater than zero for {inventoryItem.Name}.");
+            }
+
+            var baseQuantity = item.PurchaseQuantity * conversionFactor;
+            if (baseQuantity <= 0)
+            {
+                throw new PosValidationException($"Base quantity must be greater than zero for {inventoryItem.Name}.");
+            }
+
+            var totalCost = item.PurchaseQuantity * item.UnitCostPerPurchaseUnit;
+            if (totalCost < 0)
+            {
+                throw new PosValidationException($"Total cost cannot be negative for {inventoryItem.Name}.");
+            }
+
+            var unitCostBase = baseQuantity == 0 ? 0 : totalCost / baseQuantity;
+            return new PurchaseLine(
+                item.InventoryItemId,
+                purchaseUnitName,
+                item.PurchaseQuantity,
+                conversionFactor,
+                baseQuantity,
+                item.UnitCostPerPurchaseUnit,
+                unitCostBase,
+                totalCost);
+        })
+            .ToList();
 
         var purchase = new Purchase
         {
@@ -107,50 +183,44 @@ public class PurchaseService : IPurchaseService
             IdempotencyKey = dto.IdempotencyKey
         };
 
-        foreach (var item in dto.Items)
+        foreach (var item in purchaseLines)
         {
             purchase.Items.Add(new PurchaseItem
             {
                 BranchId = dto.BranchId,
                 InventoryItemId = item.InventoryItemId,
-                Quantity = item.Quantity,
-                UnitCost = item.UnitCost
+                PurchaseUnitName = item.PurchaseUnitName,
+                PurchaseQuantity = item.PurchaseQuantity,
+                ConversionFactorToBase = item.ConversionFactorToBase,
+                BaseQuantity = item.BaseQuantity,
+                UnitCostPerPurchaseUnit = item.UnitCostPerPurchaseUnit,
+                UnitCostBase = item.UnitCostBase,
+                TotalCost = item.TotalCost
             });
         }
 
         _context.Purchases.Add(purchase);
         await _context.SaveChangesAsync(cancellationToken);
 
-        var stockRoom = await GetOrCreateLocationAsync(dto.BranchId, "Stock Room", cancellationToken);
-        foreach (var item in dto.Items)
+        var stockRoom = await _inventoryTransactionService.GetOrCreateLocationAsync(dto.BranchId, "Stock Room", cancellationToken);
+        foreach (var item in purchaseLines)
         {
-            var stock = await LockStockAsync(dto.BranchId, item.InventoryItemId, stockRoom.Id, cancellationToken);
-            if (stock is null)
-            {
-                stock = new InventoryStock
-                {
-                    BranchId = dto.BranchId,
-                    InventoryItemId = item.InventoryItemId,
-                    InventoryLocationId = stockRoom.Id
-                };
-                _context.InventoryStocks.Add(stock);
-            }
-
-            stock.AverageUnitCost = CalculateWeightedAverage(stock.Quantity, stock.AverageUnitCost, item.Quantity, item.UnitCost);
-            stock.Quantity += item.Quantity;
-            _context.InventoryMovements.Add(new InventoryMovement
-            {
-                BranchId = dto.BranchId,
-                InventoryItemId = item.InventoryItemId,
-                ToLocationId = stockRoom.Id,
-                Quantity = item.Quantity,
-                UnitCost = item.UnitCost,
-                TotalCost = item.Quantity * item.UnitCost,
-                MovementType = InventoryMovementType.Purchase,
-                ReferenceType = nameof(Purchase),
-                ReferenceId = purchase.Id,
-                CreatedByUserId = dto.PerformedByUserId
-            });
+            await _inventoryTransactionService.CreditAsync(dto.BranchId, item.InventoryItemId, stockRoom.Id, item.BaseQuantity, item.UnitCostBase, cancellationToken);
+            _inventoryTransactionService.AddMovement(new InventoryMovementRequest(
+                dto.BranchId,
+                item.InventoryItemId,
+                null,
+                stockRoom.Id,
+                item.BaseQuantity,
+                item.UnitCostBase,
+                item.TotalCost,
+                InventoryMovementType.Purchase,
+                nameof(Purchase),
+                purchase.Id,
+                dto.UserSessionId,
+                dto.TerminalId,
+                dto.IdempotencyKey,
+                dto.PerformedByUserId));
         }
 
         try
@@ -202,33 +272,40 @@ public class PurchaseService : IPurchaseService
     private static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
-    private async Task<InventoryLocation> GetOrCreateLocationAsync(int branchId, string name, CancellationToken cancellationToken)
+    private static decimal ResolveConversionFactor(InventoryItem inventoryItem, string purchaseUnitName, decimal? requestedConversion)
     {
-        var location = await _context.InventoryLocations.FirstOrDefaultAsync(x => x.BranchId == branchId && x.Name == name, cancellationToken);
-        if (location is not null)
+        var option = InventoryUnitCatalog.FindOption(inventoryItem.BaseUnit, purchaseUnitName);
+        if (option is null)
         {
-            return location;
+            throw new PosValidationException($"Purchase unit {purchaseUnitName} is not valid for {inventoryItem.Name}.");
         }
 
-        location = new InventoryLocation { BranchId = branchId, Name = name };
-        _context.InventoryLocations.Add(location);
-        await _context.SaveChangesAsync(cancellationToken);
-        return location;
-    }
-
-    private async Task<InventoryStock?> LockStockAsync(int branchId, int inventoryItemId, int locationId, CancellationToken cancellationToken) =>
-        await _context.InventoryStocks
-            .FromSqlInterpolated($"SELECT *, xmin FROM \"InventoryStocks\" WHERE \"BranchId\" = {branchId} AND \"InventoryItemId\" = {inventoryItemId} AND \"InventoryLocationId\" = {locationId} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken);
-
-    private static decimal CalculateWeightedAverage(decimal oldQuantity, decimal oldAverageCost, decimal purchasedQuantity, decimal unitCost)
-    {
-        if (purchasedQuantity <= 0)
+        var conversion = requestedConversion;
+        if (option.IsFixedConversion)
         {
-            return oldAverageCost;
+            if (!conversion.HasValue || conversion.Value != option.DefaultConversionFactorToBase)
+            {
+                throw new PosValidationException($"{option.DisplayName} must convert to {option.DefaultConversionFactorToBase:0.###} {inventoryItem.BaseUnit}.");
+            }
+
+            return option.DefaultConversionFactorToBase!.Value;
         }
 
-        var totalQuantity = oldQuantity + purchasedQuantity;
-        return totalQuantity <= 0 ? unitCost : ((oldQuantity * oldAverageCost) + (purchasedQuantity * unitCost)) / totalQuantity;
+        if (!conversion.HasValue || conversion.Value <= 0)
+        {
+            throw new PosValidationException($"Conversion factor must be greater than zero for {inventoryItem.Name}.");
+        }
+
+        return conversion.Value;
     }
+
+    private sealed record PurchaseLine(
+        int InventoryItemId,
+        string PurchaseUnitName,
+        decimal PurchaseQuantity,
+        decimal ConversionFactorToBase,
+        decimal BaseQuantity,
+        decimal UnitCostPerPurchaseUnit,
+        decimal UnitCostBase,
+        decimal TotalCost);
 }

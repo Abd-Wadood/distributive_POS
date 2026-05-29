@@ -25,11 +25,11 @@
         <tr>
             <td>@expense.ExpenseDate.ToString("yyyy-MM-dd")</td>
             <td>@expense.ExpenseCategory?.Name</td>
-            <td>@expense.Amount.ToString("0.00")</td>
+            <td>@CurrencyFormatter.Format(expense.Amount)</td>
             <td>@expense.PaymentMethodId</td>
             <td>@expense.Description</td>
         </tr>
     }
     </tbody>
-    <tfoot><tr><th colspan="2">Total</th><th>@Model.Sum(x => x.Amount).ToString("0.00")</th><th colspan="2"></th></tr></tfoot>
+    <tfoot><tr><th colspan="2">Total</th><th>@CurrencyFormatter.Format(Model.Sum(x => x.Amount))</th><th colspan="2"></th></tr></tfoot>
 </table>

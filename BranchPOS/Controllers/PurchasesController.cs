@@ -87,10 +87,14 @@ public class PurchasesController : Controller
                 TerminalId = terminal.Id,
                 TerminalCode = terminal.TerminalCode,
                 SupplierId = model.SupplierId,
-                InvoiceNumber = model.InvoiceNumber,
-                Items = model.Items
-                    .Where(x => x.InventoryItemId > 0 && x.Quantity > 0)
-                    .Select(x => new PurchaseItemDto { InventoryItemId = x.InventoryItemId, Quantity = x.Quantity, UnitCost = x.UnitCost })
+                InvoiceNumber = string.IsNullOrWhiteSpace(model.InvoiceNumber) ? null : model.InvoiceNumber.Trim(),
+                Items = NormalizePurchaseRows(model)
+                    .Select(x => new PurchaseItemDto
+                    {
+                        InventoryItemId = x.InventoryItemId,
+                        PurchaseQuantity = x.PurchaseQuantity!.Value,
+                        UnitCostPerPurchaseUnit = x.UnitCostPerPurchaseUnit!.Value
+                    })
                     .ToList()
             };
             await _purchaseService.CreatePurchaseAsync(dto);
@@ -107,16 +111,81 @@ public class PurchasesController : Controller
 
     private async Task<PurchaseCreateViewModel> BuildModelAsync(PurchaseCreateViewModel model, int branchId)
     {
+        if (model.Items.Count == 0)
+        {
+            model.Items.Add(new PurchaseItemInputModel());
+        }
+
         model.Suppliers = await _context.Suppliers
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.SupplierId))
             .ToListAsync();
-        model.InventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+        ViewBag.PurchaseInventoryItems = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive && !x.IsPreparedItem)
             .OrderBy(x => x.Name)
-            .Select(x => new SelectListItem($"{x.Name} ({x.Unit})", x.Id.ToString()))
             .ToListAsync();
+        model.InventoryItems = ((List<InventoryItem>)ViewBag.PurchaseInventoryItems)
+            .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
+            .ToList();
         return model;
+    }
+
+    private List<PurchaseItemInputModel> NormalizePurchaseRows(PurchaseCreateViewModel model)
+    {
+        var rows = new List<PurchaseItemInputModel>();
+        for (var i = 0; i < model.Items.Count; i++)
+        {
+            var item = model.Items[i];
+            var rowPrefix = $"Items[{i}]";
+            var isEmpty =
+                item.InventoryItemId <= 0 &&
+                !item.PurchaseQuantity.HasValue &&
+                !item.UnitCostPerPurchaseUnit.HasValue;
+
+            if (isEmpty)
+            {
+                continue;
+            }
+
+            if (item.InventoryItemId <= 0)
+            {
+                ModelState.AddModelError($"{rowPrefix}.{nameof(item.InventoryItemId)}", "Inventory item is required.");
+            }
+
+            if (!item.PurchaseQuantity.HasValue || item.PurchaseQuantity.Value <= 0)
+            {
+                ModelState.AddModelError($"{rowPrefix}.{nameof(item.PurchaseQuantity)}", "Purchase quantity must be greater than zero.");
+            }
+
+            if (!item.UnitCostPerPurchaseUnit.HasValue || item.UnitCostPerPurchaseUnit.Value <= 0)
+            {
+                ModelState.AddModelError($"{rowPrefix}.{nameof(item.UnitCostPerPurchaseUnit)}", "Unit cost must be greater than zero.");
+            }
+
+            rows.Add(item);
+        }
+
+        if (rows.Count == 0)
+        {
+            ModelState.AddModelError(string.Empty, "Add at least one purchase item.");
+        }
+
+        var duplicateItemId = rows
+            .Where(x => x.InventoryItemId > 0)
+            .GroupBy(x => x.InventoryItemId)
+            .FirstOrDefault(x => x.Count() > 1)
+            ?.Key;
+        if (duplicateItemId.HasValue)
+        {
+            ModelState.AddModelError(string.Empty, "Duplicate inventory items are not allowed in the same purchase.");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            throw new PosValidationException("Fix the highlighted purchase rows and try again.");
+        }
+
+        return rows;
     }
 
     private string GetUserId() =>

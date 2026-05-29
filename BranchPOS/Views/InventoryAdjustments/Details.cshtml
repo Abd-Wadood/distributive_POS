@@ -1,0 +1,40 @@
+@model BranchPOS.DTOs.InventoryAdjustmentResultDto
+@using BranchPOS.Models
+@{
+    ViewData["Title"] = "Inventory Adjustment Details";
+    var canReview = ViewBag.CanReview == true;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Adjustment Details</h1>
+    <a class="btn btn-outline-secondary" asp-action="Index">Back</a>
+</div>
+
+<dl class="row">
+    <dt class="col-sm-3">Item</dt><dd class="col-sm-9">@Model.InventoryItemName</dd>
+    <dt class="col-sm-3">Location</dt><dd class="col-sm-9">@Model.LocationType</dd>
+    <dt class="col-sm-3">Type</dt><dd class="col-sm-9">@Model.AdjustmentType</dd>
+    <dt class="col-sm-3">Status</dt><dd class="col-sm-9">@Model.Status</dd>
+    <dt class="col-sm-3">Quantity</dt><dd class="col-sm-9">@Model.QuantityBaseUnit.ToString("0.###") base (@Model.DisplayQuantity?.ToString("0.###") @Model.DisplayUnitName)</dd>
+    <dt class="col-sm-3">Unit cost</dt><dd class="col-sm-9">@CurrencyFormatter.Format(Model.UnitCost)</dd>
+    <dt class="col-sm-3">Total cost</dt><dd class="col-sm-9">@CurrencyFormatter.Format(Model.TotalCost)</dd>
+    <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">@Model.Reason</dd>
+    <dt class="col-sm-3">Notes</dt><dd class="col-sm-9">@Model.Notes</dd>
+    <dt class="col-sm-3">Created by</dt><dd class="col-sm-9">@Model.CreatedByUserName at @Model.CreatedAt.ToLocalTime()</dd>
+    <dt class="col-sm-3">Approved by</dt><dd class="col-sm-9">@Model.ApprovedByUserName @Model.ApprovedAt?.ToLocalTime()</dd>
+    <dt class="col-sm-3">Rejected by</dt><dd class="col-sm-9">@Model.RejectedByUserName @Model.RejectedAt?.ToLocalTime()</dd>
+    <dt class="col-sm-3">Rejection reason</dt><dd class="col-sm-9">@Model.RejectionReason</dd>
+</dl>
+
+@if (canReview && Model.Status == InventoryAdjustmentStatus.Pending)
+{
+    <form class="d-inline" asp-action="Approve" method="post">
+        <input type="hidden" name="AdjustmentId" value="@Model.Id" />
+        <button class="btn btn-success" type="submit">Approve</button>
+    </form>
+    <form class="d-inline-flex gap-2" asp-action="Reject" method="post">
+        <input type="hidden" name="AdjustmentId" value="@Model.Id" />
+        <input name="RejectionReason" class="form-control" placeholder="Rejection reason" required />
+        <button class="btn btn-outline-danger" type="submit">Reject</button>
+    </form>
+}
