@@ -27,6 +27,10 @@ public class InventoryAdjustmentService : IInventoryAdjustmentService
     {
         ValidateCreateDto(dto);
         var item = await GetItemAsync(dto.InventoryItemId, branchId, cancellationToken);
+        if (!item.IsStockTracked || item.IsExpenseOnly)
+        {
+            throw new BusinessException("Expense-only items do not have stock balances to adjust.");
+        }
         var locationType = dto.LocationType!.Value;
         var adjustmentType = dto.AdjustmentType!.Value;
         var conversion = ConvertToBase(dto.Quantity, dto.UnitName, item);
@@ -284,7 +288,10 @@ public class InventoryAdjustmentService : IInventoryAdjustmentService
 
     private static AdjustmentConversion ConvertToBase(decimal quantity, string? unitName, InventoryItem item)
     {
-        var displayUnit = string.IsNullOrWhiteSpace(unitName) ? item.BaseUnit : unitName.Trim();
+        var displayUnit = string.IsNullOrWhiteSpace(unitName) ||
+            string.Equals(unitName.Trim(), InventoryUnitCatalog.None, StringComparison.OrdinalIgnoreCase)
+            ? item.BaseUnit
+            : unitName.Trim();
         if (string.Equals(displayUnit, item.BaseUnit, StringComparison.OrdinalIgnoreCase))
         {
             return new AdjustmentConversion(quantity, item.BaseUnit);

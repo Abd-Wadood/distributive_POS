@@ -272,6 +272,35 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Inventory_adjustment_none_unit_defaults_to_item_base_unit()
+    {
+        await using var context = CreateContext();
+        var stockRoom = await StockRoomLocationAsync(context);
+        var item = new InventoryItem { Id = 9014, BranchId = 1, Name = "Adjustment Roll", BaseUnit = "Piece", PurchaseUnitName = "Piece", DefaultConversionFactorToBase = 1m, ReorderLevel = 10 };
+        context.InventoryItems.Add(item);
+        context.InventoryStocks.Add(new InventoryStock { BranchId = 1, InventoryItem = item, InventoryLocationId = stockRoom.Id, QuantityBase = 5m, AverageUnitCostBase = 3m });
+        await context.SaveChangesAsync();
+
+        var service = InventoryAdjustmentService(context);
+        var created = await service.CreateAdjustmentAsync(new CreateInventoryAdjustmentDto
+        {
+            InventoryItemId = item.Id,
+            LocationType = InventoryLocationType.StockRoom,
+            AdjustmentType = InventoryAdjustmentType.Missing,
+            Quantity = 1m,
+            UnitName = InventoryUnitCatalog.None,
+            Reason = "Physical count short"
+        }, StockManagerId, 1);
+
+        Assert.Equal(1m, created.QuantityBaseUnit);
+        Assert.Equal("Piece", created.DisplayUnitName);
+
+        await service.ApproveAdjustmentAsync(new ApproveInventoryAdjustmentDto { AdjustmentId = created.Id }, StockManagerId, 1);
+
+        Assert.Equal(4m, (await context.InventoryStocks.SingleAsync(x => x.InventoryItemId == item.Id && x.InventoryLocationId == stockRoom.Id)).QuantityBase);
+    }
+
+    [Fact]
     public async Task Approved_adjustment_cannot_reduce_stock_below_zero()
     {
         await using var context = CreateContext();
@@ -307,7 +336,9 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         await context.SaveChangesAsync();
 
         var service = OrderService(context);
-        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(211)));
+        var noRecipeResult = await service.FinalizeOrderAsync(OrderDto(211, customerPhone: "3039"));
+        Assert.Equal(999m, noRecipeResult.Subtotal);
+        Assert.Empty(await context.InventoryMovements.Where(x => x.ReferenceType == nameof(Order) && x.ReferenceId == noRecipeResult.OrderId).ToListAsync());
         await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(212)));
         await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(999)));
         await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.FinalizeOrderAsync(OrderDto(productId, quantity: 0)));
@@ -319,6 +350,174 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         var result = await service.FinalizeOrderAsync(OrderDto(productId, quantity: 2, discount: 5m, customerPhone: "3031"));
         Assert.Equal(50m, result.Subtotal);
         Assert.Equal(45m, result.TotalAmount);
+    }
+
+    [Fact]
+    public async Task ManualKitchenIssue_and_PeriodicCount_recipe_items_do_not_auto_deduct_on_sale()
+    {
+        await using var context = CreateContext();
+        var kitchen = await KitchenLocationAsync(context);
+        var manual = new InventoryItem { Id = 9210, BranchId = 1, Name = "Manual Corn", BaseUnit = "Gram", PurchaseUnitName = "Tin", DefaultConversionFactorToBase = 1000m, ReorderLevel = 1000 };
+        manual.ConsumptionMode = ConsumptionMode.ManualKitchenIssue;
+        InventoryControlDefaults.ApplyDefaults(manual);
+        var periodic = new InventoryItem { Id = 9211, BranchId = 1, Name = "Periodic Tissue", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1m, ReorderLevel = 10 };
+        periodic.ConsumptionMode = ConsumptionMode.PeriodicCount;
+        InventoryControlDefaults.ApplyDefaults(periodic);
+        context.InventoryItems.AddRange(manual, periodic);
+        context.Products.Add(ProductWithRecipe(9210, "Corn Cup", manual, 100m, price: 50m));
+        context.Products.Add(ProductWithRecipe(9211, "Wrapped Meal", periodic, 1m, price: 70m));
+        context.InventoryStocks.AddRange(
+            new InventoryStock { BranchId = 1, InventoryItem = manual, InventoryLocationId = kitchen.Id, QuantityBase = 1000m, AverageUnitCostBase = 0.1m },
+            new InventoryStock { BranchId = 1, InventoryItem = periodic, InventoryLocationId = kitchen.Id, QuantityBase = 10m, AverageUnitCostBase = 1m });
+        await context.SaveChangesAsync();
+
+        var service = OrderService(context);
+        await service.FinalizeOrderAsync(OrderDto(9210, customerPhone: "9210"));
+        await service.FinalizeOrderAsync(OrderDto(9211, customerPhone: "9211"));
+
+        Assert.Equal(1000m, (await context.InventoryStocks.SingleAsync(x => x.InventoryItemId == manual.Id && x.InventoryLocationId == kitchen.Id)).QuantityBase);
+        Assert.Equal(10m, (await context.InventoryStocks.SingleAsync(x => x.InventoryItemId == periodic.Id && x.InventoryLocationId == kitchen.Id)).QuantityBase);
+        Assert.Empty(await context.InventoryMovements.Where(x => x.InventoryItemId == manual.Id || x.InventoryItemId == periodic.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task DirectSale_product_deducts_direct_item_from_stock_room()
+    {
+        await using var context = CreateContext();
+        var stockRoom = await StockRoomLocationAsync(context);
+        var coke = new InventoryItem { Id = 9220, BranchId = 1, Name = "Direct Coke", BaseUnit = "Piece", PurchaseUnitName = "Crate", DefaultConversionFactorToBase = 24m, ReorderLevel = 10 };
+        coke.ConsumptionMode = ConsumptionMode.DirectSale;
+        InventoryControlDefaults.ApplyDefaults(coke);
+        context.InventoryItems.Add(coke);
+        context.InventoryStocks.Add(new InventoryStock { BranchId = 1, InventoryItem = coke, InventoryLocationId = stockRoom.Id, QuantityBase = 3m, AverageUnitCostBase = 40m });
+        context.Products.Add(new Product { Id = 9220, BranchId = 1, CategoryId = 1, Name = "Coke", Price = 100m, DirectInventoryItem = coke, DirectQuantityBase = 1m });
+        await context.SaveChangesAsync();
+
+        var result = await OrderService(context).FinalizeOrderAsync(OrderDto(9220, quantity: 2, customerPhone: "9220"));
+
+        Assert.Equal(200m, result.Subtotal);
+        Assert.Equal(1m, (await context.InventoryStocks.SingleAsync(x => x.InventoryItemId == coke.Id && x.InventoryLocationId == stockRoom.Id)).QuantityBase);
+        var movement = await context.InventoryMovements.SingleAsync(x => x.InventoryItemId == coke.Id && x.ReferenceType == nameof(Order));
+        Assert.Equal(2m, movement.QuantityBase);
+        Assert.Equal(stockRoom.Id, movement.FromLocationId);
+    }
+
+    [Fact]
+    public async Task ExpenseOnly_purchase_records_cost_without_creating_stock()
+    {
+        await using var context = CreateContext();
+        var gas = new InventoryItem { Id = 9230, BranchId = 1, Name = "Expense Gas Refill", BaseUnit = "None", PurchaseUnitName = null, ReorderLevel = 0 };
+        gas.ConsumptionMode = ConsumptionMode.ExpenseOnly;
+        InventoryControlDefaults.ApplyDefaults(gas);
+        context.InventoryItems.Add(gas);
+        await context.SaveChangesAsync();
+
+        var purchaseId = await PurchaseService(context).CreatePurchaseAsync(PurchaseDto(1,
+            new PurchaseItemDto
+            {
+                InventoryItemId = gas.Id,
+                PurchaseQuantity = 1m,
+                UnitCostPerPurchaseUnit = 2500m
+            }));
+
+        var line = await context.PurchaseItems.SingleAsync(x => x.PurchaseId == purchaseId);
+        Assert.True(line.IsExpenseOnly);
+        Assert.Equal(2500m, line.TotalCost);
+        Assert.False(await context.InventoryStocks.AnyAsync(x => x.InventoryItemId == gas.Id));
+        Assert.Equal(2500m, await context.OperationalExpenses.Where(x => x.Description!.Contains($"purchase #{purchaseId}")).SumAsync(x => x.Amount));
+    }
+
+    [Fact]
+    public async Task ManualKitchenIssue_item_can_be_deducted_through_manual_usage()
+    {
+        await using var context = CreateContext();
+        var kitchen = await KitchenLocationAsync(context);
+        var item = new InventoryItem { Id = 9240, BranchId = 1, Name = "Manual Olives", BaseUnit = "Gram", PurchaseUnitName = "Tin", DefaultConversionFactorToBase = 1000m, ReorderLevel = 1000 };
+        item.ConsumptionMode = ConsumptionMode.ManualKitchenIssue;
+        InventoryControlDefaults.ApplyDefaults(item);
+        context.InventoryItems.Add(item);
+        context.InventoryStocks.Add(new InventoryStock { BranchId = 1, InventoryItem = item, InventoryLocationId = kitchen.Id, QuantityBase = 10m, AverageUnitCostBase = 2m });
+        await context.SaveChangesAsync();
+
+        await new ManualKitchenUsageService(context, new InventoryTransactionService(context)).CreateAsync(new CreateManualKitchenUsageDto
+        {
+            UsageDate = new DateTime(2026, 5, 31),
+            InventoryItemId = item.Id,
+            OpeningKitchenQuantity = 10m,
+            ReceivedFromStockRoomQuantity = 0m,
+            ClosingKitchenQuantity = 7m,
+            Notes = "Shift close"
+        }, StockManagerId, 1);
+
+        Assert.Equal(7m, (await context.InventoryStocks.SingleAsync(x => x.InventoryItemId == item.Id && x.InventoryLocationId == kitchen.Id)).QuantityBase);
+        var usage = await context.ManualKitchenUsages.SingleAsync(x => x.InventoryItemId == item.Id);
+        Assert.Equal(DateTimeKind.Utc, usage.UsageDate.Kind);
+        Assert.Equal(3m, usage.ActualUsedQuantity);
+        Assert.Equal(3m, await context.InventoryMovements.Where(x => x.InventoryItemId == item.Id && x.MovementType == InventoryMovementType.ManualConsumption).SumAsync(x => x.QuantityBase));
+        Assert.False(await context.InventoryMovements.AnyAsync(x => x.InventoryItemId == item.Id && x.MovementType == InventoryMovementType.Wastage));
+    }
+
+    [Fact]
+    public async Task PeriodicCount_item_changes_through_stock_count()
+    {
+        await using var context = CreateContext();
+        var stockRoom = await StockRoomLocationAsync(context);
+        var item = new InventoryItem { Id = 9250, BranchId = 1, Name = "Periodic Tape", BaseUnit = "Piece", PurchaseUnitName = "Roll", DefaultConversionFactorToBase = 1m, ReorderLevel = 10 };
+        item.ConsumptionMode = ConsumptionMode.PeriodicCount;
+        InventoryControlDefaults.ApplyDefaults(item);
+        context.InventoryItems.Add(item);
+        context.InventoryStocks.Add(new InventoryStock { BranchId = 1, InventoryItem = item, InventoryLocationId = stockRoom.Id, QuantityBase = 10m, AverageUnitCostBase = 3m });
+        await context.SaveChangesAsync();
+
+        await new StockCountService(context, new InventoryTransactionService(context)).CreateAsync(new CreateStockCountDto
+        {
+            CountDate = new DateTime(2026, 5, 31),
+            LocationType = InventoryLocationType.StockRoom,
+            InventoryItemId = item.Id,
+            CountedQuantity = 7m,
+            Reason = "Weekly count"
+        }, StockManagerId, 1);
+
+        Assert.Equal(7m, (await context.InventoryStocks.SingleAsync(x => x.InventoryItemId == item.Id && x.InventoryLocationId == stockRoom.Id)).QuantityBase);
+        var count = await context.StockCounts.SingleAsync(x => x.InventoryItemId == item.Id);
+        Assert.Equal(DateTimeKind.Utc, count.CountDate.Kind);
+        Assert.Equal(-3m, count.DifferenceQuantity);
+    }
+
+    [Fact]
+    public async Task ExpenseOnly_items_cannot_be_used_in_recipes_or_kitchen_dispatch()
+    {
+        await using var context = CreateContext();
+        var item = new InventoryItem { Id = 9260, BranchId = 1, Name = "Expense Cleaner", BaseUnit = "None", ReorderLevel = 0 };
+        item.ConsumptionMode = ConsumptionMode.ExpenseOnly;
+        InventoryControlDefaults.ApplyDefaults(item);
+        context.InventoryItems.Add(item);
+        context.Products.Add(new Product { Id = 9260, BranchId = 1, CategoryId = 1, Name = "Cleaner Sale", Price = 1m });
+        await context.SaveChangesAsync();
+
+        var recipeController = new RecipesController(context, new TestBranchContext(1), new PosMenuCacheInvalidator());
+        var recipeResult = await recipeController.Edit(new Recipe
+        {
+            ProductId = 9260,
+            Ingredients = { new RecipeIngredient { InventoryItemId = item.Id, QuantityRequiredBase = 1m } }
+        });
+        Assert.IsType<ViewResult>(recipeResult);
+
+        var kitchen = await KitchenLocationAsync(context);
+        var request = new KitchenRequest
+        {
+            BranchId = 1,
+            RequestNumber = $"KR-EXP-{Guid.NewGuid():N}"[..24],
+            Status = KitchenRequestStatus.Approved,
+            KitchenLocationId = kitchen.Id,
+            Details = { new KitchenRequestDetail { InventoryItem = item, InventoryItemId = item.Id, RequestedQuantity = 1m, ApprovedQuantity = 1m } }
+        };
+        context.KitchenRequests.Add(request);
+        await context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<BusinessException>(() =>
+            new RestaurantInventoryService(context, new TestBranchContext(1), new InventoryTransactionService(context), new TestIdempotencyService())
+                .DispatchKitchenRequestAsync(request.Id, StockManagerId));
     }
 
     [Fact]
@@ -417,6 +616,33 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Product_create_allows_direct_sale_stock_item_without_recipe_rows()
+    {
+        await using var context = CreateContext();
+        var coke = new InventoryItem { Id = 834, BranchId = 1, Name = "Direct Product Coke", BaseUnit = "Piece", PurchaseUnitName = "Crate", DefaultConversionFactorToBase = 24m, ReorderLevel = 10 };
+        coke.ConsumptionMode = ConsumptionMode.DirectSale;
+        InventoryControlDefaults.ApplyDefaults(coke);
+        context.InventoryItems.Add(coke);
+        await context.SaveChangesAsync();
+
+        var controller = ProductController(context);
+        var result = await controller.Create(new ProductEditViewModel
+        {
+            Name = "Direct Product Coke 1.5L",
+            Price = 100m,
+            CategoryId = 1,
+            DirectInventoryItemId = coke.Id,
+            DirectQuantityBase = 1m
+        });
+
+        Assert.IsType<RedirectToActionResult>(result);
+        var product = await context.Products.Include(x => x.Recipes).SingleAsync(x => x.Name == "Direct Product Coke 1.5L");
+        Assert.Equal(coke.Id, product.DirectInventoryItemId);
+        Assert.Equal(1m, product.DirectQuantityBase);
+        Assert.Empty(product.Recipes);
+    }
+
+    [Fact]
     public async Task Piece_based_prepared_inventory_item_defaults_to_piece_purchase_unit()
     {
         await using var context = CreateContext();
@@ -436,6 +662,82 @@ public sealed class PosEdgeCaseIntegrationTests : IAsyncLifetime
         Assert.Equal("Piece", item.BaseUnit);
         Assert.Equal("Piece", item.PurchaseUnitName);
         Assert.Equal(1m, item.DefaultConversionFactorToBase);
+    }
+
+    [Fact]
+    public async Task Inventory_item_create_returns_validation_error_for_duplicate_name_and_base_unit()
+    {
+        await using var context = CreateContext();
+        context.InventoryItems.Add(new InventoryItem
+        {
+            Id = 841,
+            BranchId = 1,
+            Name = "Duplicate Flour",
+            BaseUnit = "Gram",
+            PurchaseUnitName = "Kg",
+            DefaultConversionFactorToBase = 1000m,
+            ReorderLevel = 10m
+        });
+        await context.SaveChangesAsync();
+
+        var controller = new InventoryItemsController(context, new TestBranchContext(1));
+        var result = await controller.Create(new InventoryItem
+        {
+            Name = " Duplicate Flour ",
+            BaseUnit = "Gram",
+            PurchaseUnitName = "Kg",
+            DefaultConversionFactorToBase = 1000m,
+            ReorderLevel = 20m
+        });
+
+        Assert.IsType<ViewResult>(result);
+        Assert.False(controller.ModelState.IsValid);
+        Assert.Equal(1, await context.InventoryItems.CountAsync(x => x.Name == "Duplicate Flour" && x.BaseUnit == "Gram"));
+    }
+
+    [Fact]
+    public async Task Inventory_item_edit_returns_validation_error_for_duplicate_name_and_base_unit()
+    {
+        await using var context = CreateContext();
+        context.InventoryItems.AddRange(
+            new InventoryItem
+            {
+                Id = 842,
+                BranchId = 1,
+                Name = "Edit Existing Flour",
+                BaseUnit = "Gram",
+                PurchaseUnitName = "Kg",
+                DefaultConversionFactorToBase = 1000m,
+                ReorderLevel = 10m
+            },
+            new InventoryItem
+            {
+                Id = 843,
+                BranchId = 1,
+                Name = "Edit Other Sugar",
+                BaseUnit = "Gram",
+                PurchaseUnitName = "Kg",
+                DefaultConversionFactorToBase = 1000m,
+                ReorderLevel = 10m
+            });
+        await context.SaveChangesAsync();
+
+        var controller = new InventoryItemsController(context, new TestBranchContext(1));
+        var result = await controller.Edit(843, new InventoryItem
+        {
+            Id = 843,
+            Name = "Edit Existing Flour",
+            BaseUnit = "Gram",
+            PurchaseUnitName = "Kg",
+            DefaultConversionFactorToBase = 1000m,
+            ReorderLevel = 20m,
+            IsActive = true
+        });
+
+        Assert.IsType<ViewResult>(result);
+        Assert.False(controller.ModelState.IsValid);
+        var item = await context.InventoryItems.AsNoTracking().SingleAsync(x => x.Id == 843);
+        Assert.Equal("Edit Other Sugar", item.Name);
     }
 
     [Fact]

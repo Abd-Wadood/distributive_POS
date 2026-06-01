@@ -1,0 +1,22 @@
+@model IEnumerable<BranchPOS.Models.ManualKitchenUsage>
+@{
+    ViewData["Title"] = "Manual Usage Report";
+}
+
+<h1>Manual Usage Report</h1>
+<table class="table table-sm align-middle">
+    <thead><tr><th>Date</th><th>Item</th><th class="text-end">Opening</th><th class="text-end">Received</th><th class="text-end">Closing</th><th class="text-end">Used</th></tr></thead>
+    <tbody>
+    @foreach (var usage in Model)
+    {
+        <tr>
+            <td>@usage.UsageDate.ToString("yyyy-MM-dd")</td>
+            <td>@usage.InventoryItem?.Name</td>
+            <td class="text-end">@usage.OpeningKitchenQuantity.ToString("0.###")</td>
+            <td class="text-end">@usage.ReceivedFromStockRoomQuantity.ToString("0.###")</td>
+            <td class="text-end">@usage.ClosingKitchenQuantity.ToString("0.###")</td>
+            <td class="text-end">@usage.ActualUsedQuantity.ToString("0.###")</td>
+        </tr>
+    }
+    </tbody>
+</table>

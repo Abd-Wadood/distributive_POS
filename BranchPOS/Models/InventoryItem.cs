@@ -23,9 +23,31 @@ public class InventoryItem
     [Range(typeof(decimal), "0.001", "1000000000")]
     public decimal? DefaultConversionFactorToBase { get; set; }
 
+    public ConsumptionMode ConsumptionMode { get; set; } = ConsumptionMode.RecipeConsumption;
+
+    public TrackingLevel TrackingLevel { get; set; } = TrackingLevel.High;
+
+    public bool AllowRecipeConsumption { get; set; } = true;
+
+    public bool AllowManualConsumption { get; set; }
+
+    public bool AllowKitchenDispatch { get; set; } = true;
+
+    public bool RequirePurchaseConversion { get; set; } = true;
+
+    public bool IsStockTracked { get; set; } = true;
+
+    public bool IsExpenseOnly { get; set; }
+
+    public bool ExpiryTrackingRequired { get; set; }
+
+    public bool BatchTrackingRequired { get; set; }
+
     public decimal ReorderLevel { get; set; }
 
     public decimal? MinimumKitchenLevel { get; set; }
+
+    public decimal? MaximumKitchenLevel { get; set; }
 
     [NotMapped]
     public string Unit

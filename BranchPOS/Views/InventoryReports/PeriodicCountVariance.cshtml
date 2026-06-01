@@ -1,0 +1,23 @@
+@model IEnumerable<BranchPOS.Models.StockCount>
+@{
+    ViewData["Title"] = "Periodic Count Variance";
+}
+
+<h1>Periodic Count Variance</h1>
+<table class="table table-sm align-middle">
+    <thead><tr><th>Date</th><th>Location</th><th>Item</th><th class="text-end">System</th><th class="text-end">Counted</th><th class="text-end">Difference</th><th>Reason</th></tr></thead>
+    <tbody>
+    @foreach (var count in Model)
+    {
+        <tr>
+            <td>@count.CountDate.ToString("yyyy-MM-dd")</td>
+            <td>@count.LocationType</td>
+            <td>@count.InventoryItem?.Name</td>
+            <td class="text-end">@count.SystemQuantity.ToString("0.###")</td>
+            <td class="text-end">@count.CountedQuantity.ToString("0.###")</td>
+            <td class="text-end">@count.DifferenceQuantity.ToString("0.###")</td>
+            <td>@count.Reason</td>
+        </tr>
+    }
+    </tbody>
+</table>

@@ -40,6 +40,9 @@ public class PurchaseItemInputModel
     [Range(typeof(decimal), "0", "999999999", ErrorMessage = "Total cost cannot be negative.")]
     public decimal? TotalCost { get; set; }
 
+    [StringLength(500)]
+    public string? Notes { get; set; }
+
     public decimal? Quantity
     {
         get => PurchaseQuantity;

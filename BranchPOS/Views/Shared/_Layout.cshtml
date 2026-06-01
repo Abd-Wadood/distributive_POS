@@ -19,6 +19,9 @@
     var isAdmin = User.IsInRole("Admin");
     var isCashier = User.IsInRole("Cashier") && !isAdmin;
     var isStockManager = User.IsInRole("StockManager") && !isAdmin;
+    var navigationGroups = BuildNavigationGroups();
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -94,58 +97,46 @@
         {
             <aside id="appSidebar" class="app-sidebar border-end" aria-label="Main navigation">
                 <div class="app-sidebar-header">
-                    <div class="fw-semibold">
-                        @(isAdmin ? "Admin" : isStockManager ? "Stock" : isCashier ? "Cashier" : "Menu")
+                    <div>
+                        <div class="app-sidebar-title">
+                            @(isAdmin ? "Admin" : isStockManager ? "Stock" : isCashier ? "Cashier" : "Menu")
+                        </div>
+                        <div class="app-sidebar-subtitle">Workflow navigation</div>
                     </div>
-                    <div class="text-muted small">Navigation</div>
                 </div>
-                <nav class="app-sidebar-nav">
-                    <a class="app-sidebar-link" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                    @if (!isAdmin)
+                <div class="app-sidebar-search">
+                    <input id="sidebarSearch" class="form-control form-control-sm" type="search" placeholder="Search menu..." autocomplete="off" />
+                </div>
+                <nav id="sidebarNav" class="app-sidebar-nav">
+                    @foreach (var group in navigationGroups)
                     {
-                        <a class="app-sidebar-link" asp-controller="Sessions" asp-action="Index">Session</a>
-                    }
-                    @if (isStockManager)
-                    {
-                        <div class="app-sidebar-label">Catalog</div>
-                        <a class="app-sidebar-link" asp-controller="Products" asp-action="Index">Products</a>
-                        <a class="app-sidebar-link" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a>
-                        <a class="app-sidebar-link" asp-controller="Recipes" asp-action="Index">Product Recipes</a>
-                        <a class="app-sidebar-link" asp-controller="PreparationRecipes" asp-action="Index">Prepared Inventory</a>
+                        var visibleItems = group.Items.Where(item => CanShowNavigationItem(item, User)).ToList();
+                        if (visibleItems.Count == 0)
+                        {
+                            continue;
+                        }
 
-                        <div class="app-sidebar-label">Stock</div>
-                        <a class="app-sidebar-link" asp-controller="Purchases" asp-action="Index">Purchases</a>
-                        <a class="app-sidebar-link" asp-controller="PreparedStock" asp-action="Add">Add Prepared</a>
-                        <a class="app-sidebar-link" asp-controller="KitchenRequests" asp-action="Index">Kitchen Requests</a>
-                        <a class="app-sidebar-link" asp-controller="InventoryAdjustments" asp-action="Index">Inventory Adjustments</a>
-                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a>
-                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Kitchen">Kitchen Inventory</a>
-                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Movements">Inventory Movements</a>
-
-                        <div class="app-sidebar-label">Reports</div>
-                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Index">Inventory Reports</a>
-                        <a class="app-sidebar-link" asp-controller="InventoryReports" asp-action="Profit">Profit Report</a>
-                        <a class="app-sidebar-link" asp-controller="OperationalExpenses" asp-action="Index">Operational Expenses</a>
-                    }
-                    @if (isCashier)
-                    {
-                        <div class="app-sidebar-label">POS</div>
-                        <a class="app-sidebar-link" asp-controller="Orders" asp-action="Create">Create Order</a>
-                    }
-                    @if (isAdmin)
-                    {
-                        <div class="app-sidebar-label">Administration</div>
-                        <a class="app-sidebar-link" asp-controller="Home" asp-action="Index">Dashboard</a>
-                        <a class="app-sidebar-link" asp-controller="Users" asp-action="Index">Users</a>
-                        <a class="app-sidebar-link" asp-controller="Branches" asp-action="Index">Branches</a>
-                        <a class="app-sidebar-link" asp-controller="Sessions" asp-action="PendingCloseApprovals">Session Approvals</a>
-                        <a class="app-sidebar-link" asp-controller="Categories" asp-action="Index">Categories</a>
-                        <a class="app-sidebar-link" asp-controller="Suppliers" asp-action="Index">Suppliers</a>
-                        <a class="app-sidebar-link" asp-controller="Terminals" asp-action="Index">Terminals</a>
-                        <a class="app-sidebar-link" asp-controller="Reports" asp-action="Index">Reports</a>
+                        var groupActive = visibleItems.Any(item => IsNavigationItemActive(item, currentController, currentAction));
+                        <section class="app-nav-group" data-nav-group data-group-key="@group.Key" data-group-title="@group.Title.ToLowerInvariant()" data-active-group="@groupActive.ToString().ToLowerInvariant()">
+                            <button class="app-nav-group-toggle @(groupActive ? "is-active" : string.Empty)" type="button" aria-expanded="@groupActive.ToString().ToLowerInvariant()" title="@group.Title" data-nav-group-toggle>
+                                <span class="app-nav-label">@group.Title</span>
+                                <span class="app-nav-chevron" aria-hidden="true">›</span>
+                            </button>
+                            <div class="app-nav-group-items @(groupActive ? "is-open" : string.Empty)" data-nav-group-items>
+                                @foreach (var item in visibleItems)
+                                {
+                                    var active = IsNavigationItemActive(item, currentController, currentAction);
+                                    var url = Url.Action(item.Action, item.Controller) ?? "#";
+                                    <a class="app-sidebar-link @(active ? "active" : string.Empty)" href="@url" title="@item.Label" data-nav-item data-menu-label="@item.Label.ToLowerInvariant()">
+                                        <span class="app-nav-label">@item.Label</span>
+                                    </a>
+                                }
+                            </div>
+                        </section>
                     }
                 </nav>
             </aside>
+            <div id="sidebarOverlay" class="app-sidebar-overlay" hidden></div>
         }
         <div class="app-content">
             <main role="main" class="container-fluid pb-3 pt-3">
@@ -167,22 +158,136 @@
     {
         <script>
             (() => {
-                const key = 'BranchPOS.SidebarCollapsed';
+                const compactKey = 'BranchPOS.SidebarCompact';
+                const groupKey = 'BranchPOS.SidebarGroups';
                 const button = document.getElementById('sidebarToggle');
                 const sidebar = document.getElementById('appSidebar');
+                const overlay = document.getElementById('sidebarOverlay');
+                const search = document.getElementById('sidebarSearch');
+                const groups = Array.from(document.querySelectorAll('[data-nav-group]'));
+                const mobileQuery = window.matchMedia('(max-width: 991px)');
                 if (!button || !sidebar) return;
 
-                const setCollapsed = collapsed => {
-                    document.body.classList.toggle('sidebar-collapsed', collapsed);
-                    button.setAttribute('aria-expanded', (!collapsed).toString());
-                    button.textContent = collapsed ? 'Menu' : 'Close';
-                    localStorage.setItem(key, collapsed ? 'true' : 'false');
+                const readGroupState = () => {
+                    try {
+                        return JSON.parse(localStorage.getItem(groupKey) || '{}');
+                    } catch {
+                        return {};
+                    }
                 };
 
-                setCollapsed(localStorage.getItem(key) === 'true');
-                button.addEventListener('click', () => {
-                    setCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+                const writeGroupState = state => localStorage.setItem(groupKey, JSON.stringify(state));
+                let groupState = readGroupState();
+
+                const setGroupOpen = (group, open, persist = true) => {
+                    const toggle = group.querySelector('[data-nav-group-toggle]');
+                    const items = group.querySelector('[data-nav-group-items]');
+                    group.classList.toggle('is-open', open);
+                    items?.classList.toggle('is-open', open);
+                    toggle?.setAttribute('aria-expanded', open.toString());
+                    if (persist) {
+                        groupState[group.dataset.groupKey] = open;
+                        writeGroupState(groupState);
+                    }
+                };
+
+                groups.forEach(group => {
+                    const key = group.dataset.groupKey;
+                    const hasStoredState = Object.prototype.hasOwnProperty.call(groupState, key);
+                    const shouldOpen = group.dataset.activeGroup === 'true' || (hasStoredState ? groupState[key] === true : false);
+                    setGroupOpen(group, shouldOpen, false);
+                    group.querySelector('[data-nav-group-toggle]')?.addEventListener('click', () => {
+                        setGroupOpen(group, !group.classList.contains('is-open'));
+                    });
                 });
+
+                const closeMobileSidebar = () => {
+                    document.body.classList.remove('sidebar-mobile-open');
+                    overlay?.setAttribute('hidden', '');
+                    button.setAttribute('aria-expanded', 'false');
+                };
+
+                const openMobileSidebar = () => {
+                    document.body.classList.add('sidebar-mobile-open');
+                    overlay?.removeAttribute('hidden');
+                    button.setAttribute('aria-expanded', 'true');
+                };
+
+                const setCompact = compact => {
+                    document.body.classList.toggle('sidebar-compact', compact);
+                    localStorage.setItem(compactKey, compact ? 'true' : 'false');
+                };
+
+                const syncButton = () => {
+                    if (mobileQuery.matches) {
+                        const open = document.body.classList.contains('sidebar-mobile-open');
+                        button.textContent = open ? 'Close' : 'Menu';
+                        button.setAttribute('aria-expanded', open.toString());
+                    } else {
+                        const compact = document.body.classList.contains('sidebar-compact');
+                        button.textContent = compact ? 'Expand' : 'Compact';
+                        button.setAttribute('aria-expanded', (!compact).toString());
+                        overlay?.setAttribute('hidden', '');
+                        document.body.classList.remove('sidebar-mobile-open');
+                    }
+                };
+
+                setCompact(localStorage.getItem(compactKey) === 'true');
+                closeMobileSidebar();
+                syncButton();
+
+                button.addEventListener('click', () => {
+                    if (mobileQuery.matches) {
+                        if (document.body.classList.contains('sidebar-mobile-open')) {
+                            closeMobileSidebar();
+                        } else {
+                            openMobileSidebar();
+                        }
+                    } else {
+                        setCompact(!document.body.classList.contains('sidebar-compact'));
+                    }
+                    syncButton();
+                });
+
+                overlay?.addEventListener('click', () => {
+                    closeMobileSidebar();
+                    syncButton();
+                });
+
+                sidebar.querySelectorAll('[data-nav-item]').forEach(link => {
+                    link.addEventListener('click', () => {
+                        if (mobileQuery.matches) {
+                            closeMobileSidebar();
+                            syncButton();
+                        }
+                    });
+                });
+
+                search?.addEventListener('input', () => {
+                    const query = search.value.trim().toLowerCase();
+                    groups.forEach(group => {
+                        const titleMatch = (group.dataset.groupTitle || '').includes(query);
+                        const items = Array.from(group.querySelectorAll('[data-nav-item]'));
+                        let childMatch = false;
+                        items.forEach(item => {
+                            const matches = !query || titleMatch || (item.dataset.menuLabel || '').includes(query);
+                            item.classList.toggle('d-none', !matches);
+                            childMatch = childMatch || matches;
+                        });
+
+                        const groupMatches = !query || titleMatch || childMatch;
+                        group.classList.toggle('d-none', !groupMatches);
+                        if (query && groupMatches) {
+                            setGroupOpen(group, true, false);
+                        } else if (!query) {
+                            const key = group.dataset.groupKey;
+                            const hasStoredState = Object.prototype.hasOwnProperty.call(groupState, key);
+                            setGroupOpen(group, group.dataset.activeGroup === 'true' || (hasStoredState ? groupState[key] === true : false), false);
+                        }
+                    });
+                });
+
+                mobileQuery.addEventListener?.('change', syncButton);
             })();
         </script>
     }
@@ -235,3 +340,92 @@
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
+
+@functions {
+    private static IReadOnlyList<NavigationGroup> BuildNavigationGroups() =>
+    [
+        new NavigationGroup("dashboard", "Dashboard", "DB",
+        [
+            new NavigationItem("Home", "Home", "Index", "H"),
+            new NavigationItem("Session", "Sessions", "Index", "S", ["Cashier", "StockManager"]),
+            new NavigationItem("Create Order", "Orders", "Create", "O", ["Cashier"]),
+            new NavigationItem("Session Approvals", "Sessions", "PendingCloseApprovals", "SA", ["Admin"])
+        ]),
+        new NavigationGroup("catalog", "Catalog", "CA",
+        [
+            new NavigationItem("Products", "Products", "Index", "P", ["StockManager"], ["Index", "Create", "Edit"]),
+            new NavigationItem("Inventory Items", "InventoryItems", "Index", "II", ["StockManager"], ["Index", "Create", "Edit"]),
+            new NavigationItem("Product Recipes", "Recipes", "Index", "R", ["StockManager"], ["Index", "Edit"]),
+            new NavigationItem("Prepared Inventory", "PreparationRecipes", "Index", "PI", ["StockManager"], ["Index", "Edit", "Deactivate"]),
+            new NavigationItem("Categories", "Categories", "Index", "C", ["Admin"]),
+            new NavigationItem("Suppliers", "Suppliers", "Index", "S", ["Admin"])
+        ]),
+        new NavigationGroup("stock-operations", "Stock Operations", "SO",
+        [
+            new NavigationItem("Purchases", "Purchases", "Index", "PU", ["StockManager"], ["Index", "Create", "Details"]),
+            new NavigationItem("Add Prepared Stock", "PreparedStock", "Add", "AP", ["StockManager"]),
+            new NavigationItem("Kitchen Requests", "KitchenRequests", "Index", "KR", ["StockManager"], ["Index", "Create", "Details"]),
+            new NavigationItem("Manual Kitchen Usage", "ManualKitchenUsage", "Index", "MU", ["StockManager"]),
+            new NavigationItem("Stock Counts", "StockCounts", "Index", "SC", ["StockManager"]),
+            new NavigationItem("Inventory Adjustments", "InventoryAdjustments", "Index", "IA", ["StockManager"], ["Index", "Create", "Details", "WastageSummary"])
+        ]),
+        new NavigationGroup("inventory-views", "Inventory Views", "IV",
+        [
+            new NavigationItem("Stock Room Inventory", "InventoryReports", "StockRoom", "SR", ["StockManager"]),
+            new NavigationItem("Kitchen Inventory", "InventoryReports", "Kitchen", "KI", ["StockManager"]),
+            new NavigationItem("Inventory Movements", "InventoryReports", "Movements", "MV", ["StockManager"])
+        ]),
+        new NavigationGroup("reports", "Reports", "RP",
+        [
+            new NavigationItem("Inventory Reports", "InventoryReports", "Index", "IR", ["StockManager"], ["Index", "ControlModes", "ManualUsage", "PeriodicCountVariance", "ExpenseOnlyPurchases", "RecipeConsumption"]),
+            new NavigationItem("Profit Report", "InventoryReports", "Profit", "PR", ["StockManager"]),
+            new NavigationItem("Operational Expenses", "OperationalExpenses", "Index", "OE", ["StockManager"], ["Index", "Create"]),
+            new NavigationItem("Reports", "Reports", "Index", "R", ["Admin"])
+        ]),
+        new NavigationGroup("setup", "Setup", "ST",
+        [
+            new NavigationItem("Users", "Users", "Index", "U", ["Admin"], ["Index", "Create", "Edit"]),
+            new NavigationItem("Branches", "Branches", "Index", "B", ["Admin"], ["Index", "Create", "Edit"]),
+            new NavigationItem("Terminals", "Terminals", "Index", "T", ["Admin"], ["Index", "Create", "Edit"])
+        ])
+    ];
+
+    private static bool CanShowNavigationItem(NavigationItem item, ClaimsPrincipal user) =>
+        item.RequiredRoles.Count == 0 || item.RequiredRoles.Any(user.IsInRole);
+
+    private static bool IsNavigationItemActive(NavigationItem item, string currentController, string currentAction)
+    {
+        if (!string.Equals(item.Controller, currentController, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.Equals(item.Action, currentAction, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return item.ActiveActions.Any(action => string.Equals(action, currentAction, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed record NavigationGroup(string Key, string Title, string Icon, IReadOnlyList<NavigationItem> Items);
+
+    private sealed record NavigationItem(
+        string Label,
+        string Controller,
+        string Action,
+        string Icon,
+        IReadOnlyList<string> RequiredRoles,
+        IReadOnlyList<string> ActiveActions)
+    {
+        public NavigationItem(string label, string controller, string action, string icon)
+            : this(label, controller, action, icon, [], [])
+        {
+        }
+
+        public NavigationItem(string label, string controller, string action, string icon, IReadOnlyList<string> requiredRoles)
+            : this(label, controller, action, icon, requiredRoles, [])
+        {
+        }
+    }
+}

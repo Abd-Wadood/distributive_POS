@@ -77,7 +77,7 @@ public class RecipesController : Controller
             return View(model);
         }
 
-        var productExists = await _context.Products.AnyAsync(x => x.Id == model.ProductId && x.BranchId == branchId && x.IsActive);
+        var productExists = await _context.Products.AnyAsync(x => x.Id == model.ProductId && x.BranchId == branchId && x.IsActive && x.DirectInventoryItemId == null);
         if (!productExists)
         {
             return NotFound();
@@ -122,17 +122,17 @@ public class RecipesController : Controller
     private async Task PopulateListsAsync(int branchId)
     {
         ViewBag.Products = await _context.Products
-            .Where(x => x.BranchId == branchId && x.IsActive)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.DirectInventoryItemId == null)
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem(x.Name, x.Id.ToString()))
             .ToListAsync();
         ViewBag.InventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly && x.AllowRecipeConsumption && x.ConsumptionMode == ConsumptionMode.RecipeConsumption)
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();
         ViewBag.InventoryItemModels = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly && x.AllowRecipeConsumption && x.ConsumptionMode == ConsumptionMode.RecipeConsumption)
             .OrderBy(x => x.Name)
             .ToListAsync();
     }
@@ -174,7 +174,14 @@ public class RecipesController : Controller
     {
         var ids = inventoryItemIds.Where(x => x > 0).Distinct().ToList();
         return await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive && ids.Contains(x.Id))
+            .Where(x =>
+                x.BranchId == branchId &&
+                x.IsActive &&
+                x.IsStockTracked &&
+                !x.IsExpenseOnly &&
+                x.AllowRecipeConsumption &&
+                x.ConsumptionMode == ConsumptionMode.RecipeConsumption &&
+                ids.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id);
     }
 

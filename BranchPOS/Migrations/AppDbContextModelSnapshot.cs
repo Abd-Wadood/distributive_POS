@@ -687,13 +687,32 @@ namespace BranchPOS.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AllowKitchenDispatch")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("AllowManualConsumption")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowRecipeConsumption")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("BaseUnit")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<bool>("BatchTrackingRequired")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ConsumptionMode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -702,15 +721,32 @@ namespace BranchPOS.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
+                    b.Property<bool>("ExpiryTrackingRequired")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<bool>("IsExpenseOnly")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsPreparedItem")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<bool>("IsStockTracked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal?>("MaximumKitchenLevel")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
 
                     b.Property<decimal?>("MinimumKitchenLevel")
                         .HasPrecision(18, 3)
@@ -728,6 +764,14 @@ namespace BranchPOS.Migrations
                     b.Property<decimal>("ReorderLevel")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
+
+                    b.Property<bool>("RequirePurchaseConversion")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TrackingLevel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -747,603 +791,1033 @@ namespace BranchPOS.Migrations
                         new
                         {
                             Id = 1,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Coca-Cola 0.5L",
                             PurchaseUnitName = "0.5L Bottle",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 2,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Coca-Cola 1L",
                             PurchaseUnitName = "1L Bottle",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 3,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Coca-Cola 1.5L",
                             PurchaseUnitName = "1.5L Bottle",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 4,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Coca-Cola 300ML",
                             PurchaseUnitName = "300ML Bottle",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 5,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Aluminium Foil",
                             PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 6,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "BBQ Sauce",
                             PurchaseUnitName = "Bottle",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 7,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Black Olives",
                             PurchaseUnitName = "Tin",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 8,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Cheese",
                             PurchaseUnitName = "Kg",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 9,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Chicken Patty",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 10,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Cling Film",
                             PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 11,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Cooking Oil",
                             PurchaseUnitName = "Liter",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 12,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Eka",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 13,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "F1 Packing",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 14,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "F2 Packing",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 15,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Food Bag Large",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 16,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Forks",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 17,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Fries",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 18,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Fry Oil",
                             PurchaseUnitName = "Tin",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 19,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Gas Cylinder",
                             PurchaseUnitName = "Refill",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 20,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Ice Sugar",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 21,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Imli Sauce",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 22,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Jalapeno",
                             PurchaseUnitName = "Jar",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 23,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Mayonnaise",
                             PurchaseUnitName = "Liter",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 24,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Medium Food Bags",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 25,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Mushrooms",
                             PurchaseUnitName = "Tin",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 26,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Mustard Sauce",
                             PurchaseUnitName = "Liter",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 27,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Nido",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 28,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Nuggets",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 29,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Paratha",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 30,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Pepperoni",
                             PurchaseUnitName = "Kg",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 31,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Peri Peri Sauce",
                             PurchaseUnitName = "Bottle",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 32,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "ML",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Pizza Sauce",
                             PurchaseUnitName = "Liter",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 33,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Pizza Table",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 34,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Printer Rolls",
                             PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 35,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Sandwich Packing",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 36,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Sausages",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 37,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Sweet Corn",
                             PurchaseUnitName = "Tin",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 38,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Tomato Chilly Sachet",
                             PurchaseUnitName = "Piece",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 39,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Tape Roll",
                             PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 40,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Tikka Masala",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 41,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Piece",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Tissue Roll",
                             PurchaseUnitName = "Roll",
                             ReorderLevel = 10m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 42,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Yeast",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 43,
+                            AllowKitchenDispatch = true,
+                            AllowManualConsumption = false,
+                            AllowRecipeConsumption = true,
                             BaseUnit = "Gram",
+                            BatchTrackingRequired = false,
                             BranchId = 1,
+                            ConsumptionMode = "RecipeConsumption",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DefaultConversionFactorToBase = 1000m,
+                            ExpiryTrackingRequired = false,
                             IsActive = true,
+                            IsExpenseOnly = false,
                             IsPreparedItem = false,
+                            IsStockTracked = true,
                             Name = "Zinger Recipe Masala",
                             PurchaseUnitName = "Packet",
                             ReorderLevel = 1000m,
+                            RequirePurchaseConversion = true,
+                            TrackingLevel = "High",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
@@ -1757,6 +2231,72 @@ namespace BranchPOS.Migrations
                     b.ToTable("KitchenRequestDetails");
                 });
 
+            modelBuilder.Entity("BranchPOS.Models.ManualKitchenUsage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ActualUsedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ClosingKitchenQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("OpeningKitchenQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<decimal>("ReceivedFromStockRoomQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTime>("UsageDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UserSessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("WastedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("InventoryItemId")
+                        .HasDatabaseName("IX_ManualKitchenUsages_InventoryItemId");
+
+                    b.HasIndex("UserSessionId");
+
+                    b.HasIndex("BranchId", "UsageDate")
+                        .HasDatabaseName("IX_ManualKitchenUsages_BranchId_UsageDate");
+
+                    b.ToTable("ManualKitchenUsages");
+                });
+
             modelBuilder.Entity("BranchPOS.Models.OperationalExpense", b =>
                 {
                     b.Property<int>("Id")
@@ -2165,6 +2705,13 @@ namespace BranchPOS.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("DirectInventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("DirectQuantityBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2187,6 +2734,8 @@ namespace BranchPOS.Migrations
                     b.HasIndex("BranchId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("DirectInventoryItemId");
 
                     b.HasIndex("BranchId", "Name");
 
@@ -2298,6 +2847,13 @@ namespace BranchPOS.Migrations
                     b.Property<int?>("InventoryItemId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsExpenseOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("PurchaseId")
                         .HasColumnType("integer");
 
@@ -2408,6 +2964,69 @@ namespace BranchPOS.Migrations
                         .HasDatabaseName("UX_RecipeIngredients_RecipeId_Item");
 
                     b.ToTable("RecipeIngredients");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.StockCount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CountDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("CountedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("DifferenceQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LocationType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("SystemQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("BranchId", "CountDate")
+                        .HasDatabaseName("IX_StockCounts_BranchId_CountDate");
+
+                    b.HasIndex("InventoryItemId", "LocationType")
+                        .HasDatabaseName("IX_StockCounts_Item_Location");
+
+                    b.ToTable("StockCounts");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Supplier", b =>
@@ -3199,6 +3818,40 @@ namespace BranchPOS.Migrations
                     b.Navigation("KitchenRequest");
                 });
 
+            modelBuilder.Entity("BranchPOS.Models.ManualKitchenUsage", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.UserSession", "UserSession")
+                        .WithMany()
+                        .HasForeignKey("UserSessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("UserSession");
+                });
+
             modelBuilder.Entity("BranchPOS.Models.OperationalExpense", b =>
                 {
                     b.HasOne("BranchPOS.Models.Branch", "Branch")
@@ -3401,9 +4054,16 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BranchPOS.Models.InventoryItem", "DirectInventoryItem")
+                        .WithMany()
+                        .HasForeignKey("DirectInventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Branch");
 
                     b.Navigation("Category");
+
+                    b.Navigation("DirectInventoryItem");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Purchase", b =>
@@ -3509,6 +4169,33 @@ namespace BranchPOS.Migrations
                     b.Navigation("InventoryItem");
 
                     b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.StockCount", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("InventoryItem");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Terminal", b =>

@@ -17,6 +17,13 @@ public class ProductEditViewModel
     [Display(Name = "Category")]
     public int CategoryId { get; set; }
 
+    [Display(Name = "Direct sale inventory item")]
+    public int? DirectInventoryItemId { get; set; }
+
+    [Display(Name = "Direct quantity per sale")]
+    [Range(typeof(decimal), "0.001", "1000000000", ErrorMessage = "Direct sale quantity must be greater than zero.")]
+    public decimal? DirectQuantityBase { get; set; }
+
     public List<SelectListItem> Categories { get; set; } = new();
 
     public List<RecipeItemQuantityViewModel> RecipeItems { get; set; } = new();

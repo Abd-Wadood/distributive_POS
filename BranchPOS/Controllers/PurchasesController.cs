@@ -93,7 +93,11 @@ public class PurchasesController : Controller
                     {
                         InventoryItemId = x.InventoryItemId,
                         PurchaseQuantity = x.PurchaseQuantity!.Value,
-                        UnitCostPerPurchaseUnit = x.UnitCostPerPurchaseUnit!.Value
+                        PurchaseUnitName = string.IsNullOrWhiteSpace(x.PurchaseUnitName) ? null : x.PurchaseUnitName.Trim(),
+                        ConversionFactorToBase = x.ConversionFactorToBase,
+                        UnitCostPerPurchaseUnit = x.UnitCostPerPurchaseUnit!.Value,
+                        TotalCost = x.TotalCost,
+                        Notes = string.IsNullOrWhiteSpace(x.Notes) ? null : x.Notes.Trim()
                     })
                     .ToList()
             };
@@ -121,7 +125,7 @@ public class PurchasesController : Controller
             .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.SupplierId))
             .ToListAsync();
         ViewBag.PurchaseInventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive && !x.IsPreparedItem)
+            .Where(x => x.BranchId == branchId && x.IsActive && (!x.IsPreparedItem || x.IsExpenseOnly))
             .OrderBy(x => x.Name)
             .ToListAsync();
         model.InventoryItems = ((List<InventoryItem>)ViewBag.PurchaseInventoryItems)

@@ -31,26 +31,22 @@ public class ProductAvailabilityService : IProductAvailabilityService
         }
 
         var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
-        var requirements = await _context.RecipeIngredients
-            .AsNoTracking()
-            .Where(x => x.Recipe!.BranchId == branchId && x.Recipe.ProductId == productId && x.Recipe.IsActive && x.Recipe.Product!.IsActive)
-            .Select(x => new InventoryRequirement(x.InventoryItemId, x.QuantityRequiredBase))
-            .ToListAsync(cancellationToken);
-
-        if (requirements.Count == 0)
+        var menu = await GetCachedMenuAsync(branchId, cancellationToken);
+        var product = menu.Products.FirstOrDefault(x => x.Id == productId && x.IsActive);
+        if (product is null)
         {
             return false;
         }
 
-        var kitchenLocationId = await GetKitchenLocationIdAsync(branchId, cancellationToken);
-        var inventoryItemIds = requirements.Select(x => x.InventoryItemId).ToList();
-        var inventory = await _context.InventoryStocks
-            .AsNoTracking()
-            .Where(x => x.BranchId == branchId && x.InventoryLocationId == kitchenLocationId && inventoryItemIds.Contains(x.InventoryItemId))
-            .Select(x => new { x.InventoryItemId, x.QuantityBase })
-            .ToDictionaryAsync(x => x.InventoryItemId, x => x.QuantityBase, cancellationToken);
+        if (product.Requirements.Count == 0)
+        {
+            return true;
+        }
 
-        return requirements.All(x => inventory.TryGetValue(x.InventoryItemId, out var available) && available >= x.QuantityRequired * quantity);
+        var inventory = await GetCurrentInventoryAsync(branchId, menu with { Products = [product] }, cancellationToken);
+        return product.Requirements.All(x =>
+            inventory.TryGetValue(new InventoryLocationKey(x.InventoryItemId, x.LocationName), out var available) &&
+            available >= x.QuantityRequired * quantity);
     }
 
     public async Task<HashSet<int>> GetUnavailableProductsAsync(CancellationToken cancellationToken = default)
@@ -119,17 +115,27 @@ public class ProductAvailabilityService : IProductAvailabilityService
                 x.CategoryId,
                 x.Category == null ? "" : x.Category.Name,
                 x.IsActive,
-                null))
+                null,
+                x.DirectInventoryItemId,
+                x.DirectQuantityBase))
             .ToListAsync(cancellationToken);
 
         var productIds = products.Select(x => x.Id).ToList();
         var requirements = await _context.RecipeIngredients
             .AsNoTracking()
-            .Where(x => x.Recipe!.BranchId == branchId && x.Recipe.IsActive && productIds.Contains(x.Recipe.ProductId))
+            .Where(x =>
+                x.Recipe!.BranchId == branchId &&
+                x.Recipe.IsActive &&
+                productIds.Contains(x.Recipe.ProductId) &&
+                x.InventoryItem != null &&
+                x.InventoryItem.IsStockTracked &&
+                !x.InventoryItem.IsExpenseOnly &&
+                x.InventoryItem.AllowRecipeConsumption &&
+                x.InventoryItem.ConsumptionMode == ConsumptionMode.RecipeConsumption)
             .Select(x => new
             {
                 x.Recipe!.ProductId,
-                Requirement = new InventoryRequirement(x.InventoryItemId, x.QuantityRequiredBase)
+                Requirement = new InventoryRequirement(x.InventoryItemId, x.QuantityRequiredBase, "Kitchen")
             })
             .ToListAsync(cancellationToken);
 
@@ -143,12 +149,29 @@ public class ProductAvailabilityService : IProductAvailabilityService
             .Select(x => new PosCategoryMenuItem(x.Id, x.Name))
             .ToListAsync(cancellationToken);
 
+        var directItemIds = products
+            .Where(x => x.DirectInventoryItemId.HasValue && x.DirectQuantityBase.GetValueOrDefault() > 0)
+            .Select(x => x.DirectInventoryItemId!.Value)
+            .Distinct()
+            .ToList();
+        var validDirectItems = directItemIds.Count == 0
+            ? []
+            : await _context.InventoryItems
+                .AsNoTracking()
+                .Where(x =>
+                    x.BranchId == branchId &&
+                    x.IsActive &&
+                    x.IsStockTracked &&
+                    !x.IsExpenseOnly &&
+                    x.ConsumptionMode == ConsumptionMode.DirectSale &&
+                    directItemIds.Contains(x.Id))
+                .Select(x => x.Id)
+                .ToListAsync(cancellationToken);
+
         var menu = new PosMenuCacheItem(
             products.Select(x => x with
             {
-                Requirements = requirementsByProduct.TryGetValue(x.Id, out var productRequirements)
-                    ? productRequirements
-                    : []
+                Requirements = BuildProductRequirements(x, requirementsByProduct, validDirectItems)
             }).ToList(),
             categories);
 
@@ -160,9 +183,27 @@ public class ProductAvailabilityService : IProductAvailabilityService
         return menu;
     }
 
-    private async Task<Dictionary<int, decimal>> GetCurrentInventoryAsync(int branchId, PosMenuCacheItem menu, CancellationToken cancellationToken)
+    private static List<InventoryRequirement> BuildProductRequirements(
+        PosProductMenuItem product,
+        Dictionary<int, List<InventoryRequirement>> requirementsByProduct,
+        List<int> validDirectItemIds)
+    {
+        if (product.DirectInventoryItemId.HasValue &&
+            product.DirectQuantityBase.GetValueOrDefault() > 0 &&
+            validDirectItemIds.Contains(product.DirectInventoryItemId.Value))
+        {
+            return [new InventoryRequirement(product.DirectInventoryItemId.Value, product.DirectQuantityBase!.Value, "Stock Room")];
+        }
+
+        return requirementsByProduct.TryGetValue(product.Id, out var productRequirements)
+            ? productRequirements
+            : [];
+    }
+
+    private async Task<Dictionary<InventoryLocationKey, decimal>> GetCurrentInventoryAsync(int branchId, PosMenuCacheItem menu, CancellationToken cancellationToken)
     {
         var kitchenLocationId = await GetKitchenLocationIdAsync(branchId, cancellationToken);
+        var stockRoomLocationId = await GetStockRoomLocationIdAsync(branchId, cancellationToken);
         var inventoryItemIds = menu.Products
             .SelectMany(x => x.Requirements)
             .Select(x => x.InventoryItemId)
@@ -175,17 +216,24 @@ public class ProductAvailabilityService : IProductAvailabilityService
         }
 
         // Live inventory is intentionally not cached; final order completion also locks inventory rows in the DB.
-        return await _context.InventoryStocks
+        var locationIds = new[] { kitchenLocationId, stockRoomLocationId };
+        var rows = await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.BranchId == branchId && x.InventoryLocationId == kitchenLocationId && inventoryItemIds.Contains(x.InventoryItemId))
-            .Select(x => new { x.InventoryItemId, x.QuantityBase })
-            .ToDictionaryAsync(x => x.InventoryItemId, x => x.QuantityBase, cancellationToken);
+            .Where(x => x.BranchId == branchId && locationIds.Contains(x.InventoryLocationId) && inventoryItemIds.Contains(x.InventoryItemId))
+            .Select(x => new { x.InventoryItemId, x.InventoryLocationId, x.QuantityBase })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(
+            x => new InventoryLocationKey(x.InventoryItemId, x.InventoryLocationId == stockRoomLocationId ? "Stock Room" : "Kitchen"),
+            x => x.QuantityBase);
     }
 
-    private static bool CanMakeOne(PosProductMenuItem product, Dictionary<int, decimal> inventory) =>
+    private static bool CanMakeOne(PosProductMenuItem product, Dictionary<InventoryLocationKey, decimal> inventory) =>
         product.IsActive &&
-        product.Requirements.Count > 0 &&
-        product.Requirements.All(x => inventory.TryGetValue(x.InventoryItemId, out var available) && available >= x.QuantityRequired);
+        (product.Requirements.Count == 0 ||
+            product.Requirements.All(x =>
+                inventory.TryGetValue(new InventoryLocationKey(x.InventoryItemId, x.LocationName), out var available) &&
+                available >= x.QuantityRequired));
 
     private async Task<int> GetKitchenLocationIdAsync(int branchId, CancellationToken cancellationToken)
     {
@@ -203,6 +251,22 @@ public class ProductAvailabilityService : IProductAvailabilityService
         return location.Id;
     }
 
+    private async Task<int> GetStockRoomLocationIdAsync(int branchId, CancellationToken cancellationToken)
+    {
+        var location = await _context.InventoryLocations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BranchId == branchId && x.Name == "Stock Room", cancellationToken);
+        if (location is not null)
+        {
+            return location.Id;
+        }
+
+        location = new InventoryLocation { BranchId = branchId, Name = "Stock Room" };
+        _context.InventoryLocations.Add(location);
+        await _context.SaveChangesAsync(cancellationToken);
+        return location.Id;
+    }
+
     private sealed record PosMenuCacheItem(List<PosProductMenuItem> Products, List<PosCategoryMenuItem> Categories);
 
     private sealed record PosProductMenuItem(
@@ -212,12 +276,16 @@ public class ProductAvailabilityService : IProductAvailabilityService
         int CategoryId,
         string CategoryName,
         bool IsActive,
-        string? ImagePath)
+        string? ImagePath,
+        int? DirectInventoryItemId,
+        decimal? DirectQuantityBase)
     {
         public List<InventoryRequirement> Requirements { get; init; } = [];
     }
 
     private sealed record PosCategoryMenuItem(int Id, string Name);
 
-    private sealed record InventoryRequirement(int InventoryItemId, decimal QuantityRequired);
+    private sealed record InventoryRequirement(int InventoryItemId, decimal QuantityRequired, string LocationName);
+
+    private sealed record InventoryLocationKey(int InventoryItemId, string LocationName);
 }

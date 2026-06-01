@@ -22,17 +22,44 @@ public class PurchaseItem
     [MaxLength(80)]
     public string PurchaseUnitName { get; set; } = string.Empty;
 
+    [MaxLength(80)]
+    [NotMapped]
+    public string PurchaseUnit
+    {
+        get => PurchaseUnitName;
+        set => PurchaseUnitName = value;
+    }
+
     public decimal PurchaseQuantity { get; set; }
 
     public decimal ConversionFactorToBase { get; set; }
 
+    [NotMapped]
+    public decimal ConversionToBaseUnit
+    {
+        get => ConversionFactorToBase;
+        set => ConversionFactorToBase = value;
+    }
+
     public decimal BaseQuantity { get; set; }
+
+    [NotMapped]
+    public decimal TotalBaseQuantity
+    {
+        get => BaseQuantity;
+        set => BaseQuantity = value;
+    }
 
     public decimal UnitCostPerPurchaseUnit { get; set; }
 
     public decimal UnitCostBase { get; set; }
 
     public decimal TotalCost { get; set; }
+
+    public bool IsExpenseOnly { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
 
     [NotMapped]
     public decimal Quantity

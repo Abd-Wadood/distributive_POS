@@ -22,6 +22,9 @@ public class PurchaseItemDto : IValidatableObject
     [Range(typeof(decimal), "0", "999999999")]
     public decimal? TotalCost { get; set; }
 
+    [StringLength(500)]
+    public string? Notes { get; set; }
+
     public decimal Quantity
     {
         get => PurchaseQuantity;

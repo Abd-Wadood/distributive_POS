@@ -9,12 +9,13 @@
 </div>
 
 <table class="table table-striped">
-    <thead><tr><th>Name</th><th>Base unit</th><th>Purchase unit</th><th>Conversion</th><th>Reorder level</th><th>Type</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Mode</th><th>Base unit</th><th>Purchase unit</th><th>Conversion</th><th>Reorder level</th><th>Type</th><th>Status</th><th></th></tr></thead>
     <tbody>
     @foreach (var item in Model)
     {
         <tr>
             <td>@item.Name</td>
+            <td>@item.ConsumptionMode</td>
             <td>@item.BaseUnit</td>
             <td>@item.PurchaseUnitName</td>
             <td>@item.DefaultConversionFactorToBase?.ToString("0.###")</td>

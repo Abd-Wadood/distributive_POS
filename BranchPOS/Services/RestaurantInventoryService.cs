@@ -109,6 +109,11 @@ public class RestaurantInventoryService : IRestaurantInventoryService
                 throw new BusinessException("Kitchen request contains an inventory item outside the active branch.");
             }
 
+            if (detail.InventoryItem is null || !InventoryControlDefaults.CanDispatchToKitchen(detail.InventoryItem))
+            {
+                throw new BusinessException($"{detail.InventoryItem?.Name ?? "This item"} cannot be dispatched to the kitchen under its consumption mode.");
+            }
+
             var fromStock = await LockStockAsync(branchId, detail.InventoryItemId, stockRoom.Id, cancellationToken)
                 ?? throw new BusinessException($"Not enough stock room quantity for {detail.InventoryItem?.Name}. Required: {quantity:0.###} {detail.InventoryItem?.BaseUnit}, Available: 0 {detail.InventoryItem?.BaseUnit}.");
 
@@ -189,14 +194,18 @@ public class RestaurantInventoryService : IRestaurantInventoryService
         }
 
         var movements = _context.InventoryMovements.AsNoTracking()
-            .Where(x => x.BranchId == branchId && x.MovementType == InventoryMovementType.Consumption);
+            .Where(x => x.BranchId == branchId && (x.MovementType == InventoryMovementType.Consumption || x.MovementType == InventoryMovementType.ManualConsumption));
+        var wastageMovements = _context.InventoryMovements.AsNoTracking()
+            .Where(x => x.BranchId == branchId && x.MovementType == InventoryMovementType.Wastage);
         if (fromUtc.HasValue)
         {
             movements = movements.Where(x => x.CreatedAt >= fromUtc.Value);
+            wastageMovements = wastageMovements.Where(x => x.CreatedAt >= fromUtc.Value);
         }
         if (toUtc.HasValue)
         {
             movements = movements.Where(x => x.CreatedAt < toUtc.Value);
+            wastageMovements = wastageMovements.Where(x => x.CreatedAt < toUtc.Value);
         }
 
         var expenses = _context.OperationalExpenses.AsNoTracking().Where(x => x.BranchId == branchId);
@@ -241,13 +250,14 @@ public class RestaurantInventoryService : IRestaurantInventoryService
         var spillageCost = await adjustments
             .Where(x => x.AdjustmentType == InventoryAdjustmentType.Spillage)
             .SumAsync(x => x.TotalCost, cancellationToken);
+        var manualWastageCost = await wastageMovements.SumAsync(x => x.TotalCost, cancellationToken);
         var correctionIncreaseTotal = await adjustments
             .Where(x => x.AdjustmentType == InventoryAdjustmentType.CorrectionIncrease)
             .SumAsync(x => x.TotalCost, cancellationToken);
         var correctionDecreaseTotal = await adjustments
             .Where(x => x.AdjustmentType == InventoryAdjustmentType.CorrectionDecrease)
             .SumAsync(x => x.TotalCost, cancellationToken);
-        var inventoryLoss = stockRoomWasteCost + kitchenWasteCost + missingStockCost + expiredStockCost + damagedStockCost + spillageCost + correctionDecreaseTotal - correctionIncreaseTotal;
+        var inventoryLoss = stockRoomWasteCost + kitchenWasteCost + manualWastageCost + missingStockCost + expiredStockCost + damagedStockCost + spillageCost + correctionDecreaseTotal - correctionIncreaseTotal;
         return new ProfitReportViewModel
         {
             From = from,

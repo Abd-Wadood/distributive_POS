@@ -110,6 +110,14 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5SXRlbXNcX0ludmVudG9yeUl0ZW1Gb3JtLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/ControlModes.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xDb250cm9sTW9kZXMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/ExpenseOnlyPurchases.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xFeHBlbnNlT25seVB1cmNoYXNlcy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
@@ -118,12 +126,24 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xMb3dTdG9jay5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/ManualUsage.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xNYW51YWxVc2FnZS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/Movements.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xNb3ZlbWVudHMuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/PeriodicCountVariance.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xQZXJpb2RpY0NvdW50VmFyaWFuY2UuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/Profit.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xQcm9maXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/RecipeConsumption.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSW52ZW50b3J5UmVwb3J0c1xSZWNpcGVDb25zdW1wdGlvbi5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/InventoryReports/Stock.cshtml]
@@ -136,6 +156,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/KitchenRequests/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcS2l0Y2hlblJlcXVlc3RzXEluZGV4LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/ManualKitchenUsage/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTWFudWFsS2l0Y2hlblVzYWdlXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/OperationalExpenses/Categories.cshtml]
@@ -236,6 +260,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Shared/_ValidationScriptsPartial.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/StockCounts/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU3RvY2tDb3VudHNcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/wadoo/OneDrive/Desktop/Offline POS/BranchPOS/Views/Suppliers/Create.cshtml]

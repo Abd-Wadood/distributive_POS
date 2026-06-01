@@ -1,9 +1,10 @@
 @model BranchPOS.DTOs.CreateInventoryAdjustmentDto
 @using BranchPOS.Models
+@using System.Text.Json
 @{
     ViewData["Title"] = "New Inventory Adjustment";
     var items = (IEnumerable<SelectListItem>)ViewBag.InventoryItems;
-    var unitOptions = (IEnumerable<SelectListItem>)ViewBag.UnitOptions;
+    var itemBaseUnits = (IDictionary<int, string>)ViewBag.InventoryItemBaseUnits;
 }
 
 <h1>New Inventory Adjustment</h1>
@@ -38,9 +39,8 @@
     </div>
     <div class="col-md-3">
         <label asp-for="UnitName" class="form-label">Unit</label>
-        <select asp-for="UnitName" class="form-select" asp-items="unitOptions">
-            <option value="">Base unit</option>
-        </select>
+        <input id="UnitNameDisplay" class="form-control" value="@Model.UnitName" readonly />
+        <input asp-for="UnitName" id="UnitName" type="hidden" />
     </div>
     <div class="col-12">
         <label asp-for="Reason" class="form-label"></label>
@@ -59,4 +59,25 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const itemBaseUnits = @Html.Raw(JsonSerializer.Serialize(itemBaseUnits));
+            const itemSelect = document.getElementById('InventoryItemId');
+            const unitInput = document.getElementById('UnitName');
+            const unitDisplay = document.getElementById('UnitNameDisplay');
+
+            const syncUnit = () => {
+                const baseUnit = itemBaseUnits[itemSelect?.value] || '';
+                if (unitInput) {
+                    unitInput.value = baseUnit;
+                }
+                if (unitDisplay) {
+                    unitDisplay.value = baseUnit;
+                }
+            };
+
+            itemSelect?.addEventListener('change', syncUnit);
+            syncUnit();
+        })();
+    </script>
 }

@@ -68,7 +68,13 @@ public class KitchenRequestsController : Controller
         var inventoryItemIds = request.Details.Select(x => x.InventoryItemId).Distinct().ToList();
         if (inventoryItemIds.Count > 0)
         {
-            var validCount = await _context.InventoryItems.CountAsync(x => x.BranchId == branchId && x.IsActive && inventoryItemIds.Contains(x.Id));
+            var validCount = await _context.InventoryItems.CountAsync(x =>
+                x.BranchId == branchId &&
+                x.IsActive &&
+                x.IsStockTracked &&
+                !x.IsExpenseOnly &&
+                x.AllowKitchenDispatch &&
+                inventoryItemIds.Contains(x.Id));
             if (validCount != inventoryItemIds.Count)
             {
                 ModelState.AddModelError(string.Empty, "One or more requested inventory items do not belong to the active branch.");
@@ -271,7 +277,7 @@ public class KitchenRequestsController : Controller
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
         return await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly && x.AllowKitchenDispatch)
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();

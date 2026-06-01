@@ -47,7 +47,8 @@
                                     selected="@(Model.Items[i].InventoryItemId == item.Id)"
                                     data-base-unit="@item.BaseUnit"
                                     data-purchase-unit="@item.PurchaseUnitName"
-                                    data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")">
+                                    data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")"
+                                    data-expense-only="@item.IsExpenseOnly.ToString().ToLowerInvariant()">
                                 @item.Name (@item.BaseUnit)
                             </option>
                         }
@@ -59,9 +60,9 @@
                     <input name="Items[@i].PurchaseQuantity" value="@Model.Items[i].PurchaseQuantity" class="form-control purchase-quantity-input" type="number" step="0.001" />
                     <span asp-validation-for="Items[i].PurchaseQuantity" class="text-danger"></span>
                 </td>
-                <td><input class="form-control purchase-unit-display" type="text" readonly /></td>
+                <td><input name="Items[@i].PurchaseUnitName" value="@Model.Items[i].PurchaseUnitName" class="form-control purchase-unit-display" type="text" /></td>
                 <td>
-                    <input class="form-control conversion-display" type="text" readonly />
+                    <input name="Items[@i].ConversionFactorToBase" value="@Model.Items[i].ConversionFactorToBase" class="form-control conversion-display" type="number" step="0.001" />
                     <div class="form-text conversion-helper"></div>
                 </td>
                 <td><output class="base-quantity-output text-muted"></output></td>
@@ -69,7 +70,7 @@
                     <input name="Items[@i].UnitCostPerPurchaseUnit" value="@Model.Items[i].UnitCostPerPurchaseUnit" class="form-control unit-cost-input" type="number" step="0.01" />
                     <span asp-validation-for="Items[i].UnitCostPerPurchaseUnit" class="text-danger"></span>
                 </td>
-                <td><input class="form-control total-cost-output" type="text" readonly /></td>
+                <td><input name="Items[@i].TotalCost" value="@Model.Items[i].TotalCost" class="form-control total-cost-output" type="number" step="0.01" /></td>
                 <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
             </tr>
         }
@@ -93,7 +94,8 @@
                     <option value="@item.Id"
                             data-base-unit="@item.BaseUnit"
                             data-purchase-unit="@item.PurchaseUnitName"
-                            data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")">
+                            data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")"
+                            data-expense-only="@item.IsExpenseOnly.ToString().ToLowerInvariant()">
                         @item.Name (@item.BaseUnit)
                     </option>
                 }
@@ -101,14 +103,14 @@
             <div class="form-text item-helper"></div>
         </td>
         <td><input class="form-control purchase-quantity-input" type="number" step="0.001" /></td>
-        <td><input class="form-control purchase-unit-display" type="text" readonly /></td>
+        <td><input class="form-control purchase-unit-display" type="text" /></td>
         <td>
-            <input class="form-control conversion-display" type="text" readonly />
+            <input class="form-control conversion-display" type="number" step="0.001" />
             <div class="form-text conversion-helper"></div>
         </td>
         <td><output class="base-quantity-output text-muted"></output></td>
         <td><input class="form-control unit-cost-input" type="number" step="0.01" /></td>
-        <td><input class="form-control total-cost-output" type="text" readonly /></td>
+        <td><input class="form-control total-cost-output" type="number" step="0.01" /></td>
         <td><button class="btn btn-sm btn-outline-danger remove-row-button" type="button">Remove</button></td>
     </tr>
 </template>
@@ -130,12 +132,13 @@
                 const option = selectedItem(row);
                 const baseUnit = option?.dataset.baseUnit || '';
                 const purchaseUnit = option?.dataset.purchaseUnit || '';
-                const conversion = Number(option?.dataset.conversion);
+                const expenseOnly = option?.dataset.expenseOnly === 'true';
+                const conversionValue = row.querySelector('.conversion-display');
+                const purchaseUnitDisplay = row.querySelector('.purchase-unit-display');
+                const conversion = Number(conversionValue?.value || option?.dataset.conversion);
                 const quantity = Number(row.querySelector('.purchase-quantity-input')?.value);
                 const unitCost = Number(row.querySelector('.unit-cost-input')?.value);
                 const itemHelper = row.querySelector('.item-helper');
-                const purchaseUnitDisplay = row.querySelector('.purchase-unit-display');
-                const conversionDisplay = row.querySelector('.conversion-display');
                 const conversionHelper = row.querySelector('.conversion-helper');
                 const baseQuantityOutput = row.querySelector('.base-quantity-output');
                 const totalCostOutput = row.querySelector('.total-cost-output');
@@ -150,22 +153,35 @@
                     return;
                 }
 
-                itemHelper.textContent = `Base unit: ${baseUnit}`;
-                purchaseUnitDisplay.value = purchaseUnit;
-                conversionDisplay.value = Number.isFinite(conversion) ? `${formatDecimal(conversion)} ${baseUnit}` : '';
-                conversionHelper.textContent = Number.isFinite(conversion) ? `1 ${purchaseUnit} = ${formatDecimal(conversion)} ${baseUnit}` : '';
+                itemHelper.textContent = expenseOnly ? 'Expense only: cost is recorded without stock quantity.' : `Base unit: ${baseUnit}`;
+                if (!purchaseUnitDisplay.value) {
+                    purchaseUnitDisplay.value = purchaseUnit;
+                }
+                if (!conversionValue.value && Number.isFinite(conversion) && conversion > 0) {
+                    conversionValue.value = formatDecimal(conversion);
+                }
+                conversionValue.disabled = expenseOnly;
+                purchaseUnitDisplay.disabled = false;
+                conversionHelper.textContent = expenseOnly
+                    ? 'No stock conversion is needed.'
+                    : Number.isFinite(conversion) ? `1 ${purchaseUnitDisplay.value || purchaseUnit} = ${formatDecimal(conversion)} ${baseUnit}` : '';
 
-                const baseQuantity = quantity > 0 && conversion > 0 ? quantity * conversion : NaN;
+                const baseQuantity = !expenseOnly && quantity > 0 && conversion > 0 ? quantity * conversion : NaN;
                 const totalCost = quantity > 0 && unitCost > 0 ? quantity * unitCost : NaN;
                 baseQuantityOutput.textContent = Number.isFinite(baseQuantity) ? `${formatDecimal(baseQuantity)} ${baseUnit}` : '';
-                totalCostOutput.value = Number.isFinite(totalCost) ? Number(totalCost.toFixed(2)).toString() : '';
+                if (!totalCostOutput.value || document.activeElement !== totalCostOutput) {
+                    totalCostOutput.value = Number.isFinite(totalCost) ? Number(totalCost.toFixed(2)).toString() : '';
+                }
             };
 
             const refreshRowNames = () => {
                 rows.querySelectorAll('.purchase-row').forEach((row, index) => {
                     row.querySelector('.inventory-item-select').name = `Items[${index}].InventoryItemId`;
                     row.querySelector('.purchase-quantity-input').name = `Items[${index}].PurchaseQuantity`;
+                    row.querySelector('.purchase-unit-display').name = `Items[${index}].PurchaseUnitName`;
+                    row.querySelector('.conversion-display').name = `Items[${index}].ConversionFactorToBase`;
                     row.querySelector('.unit-cost-input').name = `Items[${index}].UnitCostPerPurchaseUnit`;
+                    row.querySelector('.total-cost-output').name = `Items[${index}].TotalCost`;
                     row.querySelector('.remove-row-button').disabled = rows.querySelectorAll('.purchase-row').length === 1;
                 });
             };
@@ -173,6 +189,8 @@
             const wireRow = row => {
                 row.querySelector('.inventory-item-select')?.addEventListener('change', () => recalculateRow(row));
                 row.querySelector('.purchase-quantity-input')?.addEventListener('input', () => recalculateRow(row));
+                row.querySelector('.purchase-unit-display')?.addEventListener('input', () => recalculateRow(row));
+                row.querySelector('.conversion-display')?.addEventListener('input', () => recalculateRow(row));
                 row.querySelector('.unit-cost-input')?.addEventListener('input', () => recalculateRow(row));
                 row.querySelector('.remove-row-button')?.addEventListener('click', () => {
                     row.remove();

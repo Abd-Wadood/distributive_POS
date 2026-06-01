@@ -114,6 +114,21 @@ let selectedCategoryId = 'all';
 let searchTerm = '';
 let searchDebounceTimer = null;
 
+function normalizeProduct(product) {
+    return {
+        Id: product.Id ?? product.id,
+        Name: product.Name ?? product.name ?? '',
+        Price: product.Price ?? product.price ?? 0,
+        CategoryId: product.CategoryId ?? product.categoryId,
+        CategoryName: product.CategoryName ?? product.categoryName ?? '',
+        IsActive: product.IsActive ?? product.isActive ?? true,
+        ImagePath: product.ImagePath ?? product.imagePath ?? null,
+        IsAvailable: product.IsAvailable ?? product.isAvailable ?? true
+    };
+}
+
+products = products.map(normalizeProduct);
+
 function newLocalId() {
     if (window.crypto?.randomUUID) {
         return crypto.randomUUID();
@@ -350,7 +365,7 @@ async function refreshProducts() {
             cache: 'no-store'
         });
         if (!response.ok) return;
-        products = await response.json();
+        products = (await response.json()).map(normalizeProduct);
         renderProducts();
         renderCart();
     } catch {

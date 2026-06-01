@@ -19,6 +19,12 @@ public class Product
 
     public Category? Category { get; set; }
 
+    public int? DirectInventoryItemId { get; set; }
+
+    public InventoryItem? DirectInventoryItem { get; set; }
+
+    public decimal? DirectQuantityBase { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

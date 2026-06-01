@@ -1,0 +1,23 @@
+@model IEnumerable<BranchPOS.Models.InventoryItem>
+@{
+    ViewData["Title"] = "Inventory Control Modes";
+}
+
+<h1>Inventory Control Modes</h1>
+<table class="table table-sm align-middle">
+    <thead><tr><th>Mode</th><th>Item</th><th>Tracking</th><th>Recipe</th><th>Manual</th><th>Dispatch</th><th>Expense</th></tr></thead>
+    <tbody>
+    @foreach (var item in Model)
+    {
+        <tr>
+            <td>@item.ConsumptionMode</td>
+            <td>@item.Name</td>
+            <td>@(item.IsStockTracked ? item.TrackingLevel : "None")</td>
+            <td>@(item.AllowRecipeConsumption ? "Yes" : "No")</td>
+            <td>@(item.AllowManualConsumption ? "Yes" : "No")</td>
+            <td>@(item.AllowKitchenDispatch ? "Yes" : "No")</td>
+            <td>@(item.IsExpenseOnly ? "Yes" : "No")</td>
+        </tr>
+    }
+    </tbody>
+</table>

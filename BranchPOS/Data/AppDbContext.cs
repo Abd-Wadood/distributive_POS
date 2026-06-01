@@ -41,6 +41,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
     public DbSet<TerminalHeartbeat> TerminalHeartbeats => Set<TerminalHeartbeat>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<ManualKitchenUsage> ManualKitchenUsages => Set<ManualKitchenUsage>();
+    public DbSet<StockCount> StockCounts => Set<StockCount>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -87,6 +89,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany(x => x.Products)
                 .HasForeignKey(x => x.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.DirectInventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.DirectInventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(x => x.DirectQuantityBase).HasPrecision(18, 3);
         });
 
         builder.Entity<InventoryLocation>(entity =>
@@ -109,10 +116,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.Property(x => x.BaseUnit).HasMaxLength(40).IsRequired();
             entity.Property(x => x.PurchaseUnitName).HasMaxLength(80);
             entity.Property(x => x.DefaultConversionFactorToBase).HasPrecision(18, 3);
+            entity.Property(x => x.ConsumptionMode).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.TrackingLevel).HasConversion<string>().HasMaxLength(20);
             entity.Property(x => x.ReorderLevel).HasPrecision(18, 3);
             entity.Property(x => x.MinimumKitchenLevel).HasPrecision(18, 3);
+            entity.Property(x => x.MaximumKitchenLevel).HasPrecision(18, 3);
             entity.Property(x => x.IsActive).HasDefaultValue(true);
             entity.Property(x => x.IsPreparedItem).HasDefaultValue(false);
+            entity.Property(x => x.IsStockTracked).HasDefaultValue(true);
+            entity.Property(x => x.AllowKitchenDispatch).HasDefaultValue(true);
+            entity.Property(x => x.IsExpenseOnly).HasDefaultValue(false);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -517,6 +530,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.Property(x => x.UnitCostPerPurchaseUnit).HasPrecision(18, 2);
             entity.Property(x => x.UnitCostBase).HasPrecision(18, 6);
             entity.Property(x => x.TotalCost).HasPrecision(18, 2);
+            entity.Property(x => x.Notes).HasMaxLength(500);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -794,6 +808,58 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany()
                 .HasForeignKey(x => x.UserSessionId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<ManualKitchenUsage>(entity =>
+        {
+            entity.HasIndex(x => new { x.BranchId, x.UsageDate }).HasDatabaseName("IX_ManualKitchenUsages_BranchId_UsageDate");
+            entity.HasIndex(x => x.InventoryItemId).HasDatabaseName("IX_ManualKitchenUsages_InventoryItemId");
+            entity.Property(x => x.OpeningKitchenQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.ReceivedFromStockRoomQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.ClosingKitchenQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.WastedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.ActualUsedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.UserSession)
+                .WithMany()
+                .HasForeignKey(x => x.UserSessionId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<StockCount>(entity =>
+        {
+            entity.HasIndex(x => new { x.BranchId, x.CountDate }).HasDatabaseName("IX_StockCounts_BranchId_CountDate");
+            entity.HasIndex(x => new { x.InventoryItemId, x.LocationType }).HasDatabaseName("IX_StockCounts_Item_Location");
+            entity.Property(x => x.LocationType).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.SystemQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.CountedQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.DifferenceQuantity).HasPrecision(18, 3);
+            entity.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.HasSequence<long>("SessionCodeSequence");

@@ -309,6 +309,11 @@ public class OrdersController : Controller
                     continue;
                 }
 
+                if (!InventoryControlDefaults.CanUseInRecipe(ingredient.InventoryItem))
+                {
+                    continue;
+                }
+
                 var required = ingredient.QuantityRequiredBase * requestedItem.Quantity;
                 if (requiredByItem.TryGetValue(ingredient.InventoryItemId, out var existing))
                 {
@@ -343,7 +348,12 @@ public class OrdersController : Controller
             .Where(x =>
                 x.Recipe!.BranchId == branchId &&
                 x.Recipe.IsActive &&
-                x.Recipe.Product!.IsActive)
+                x.Recipe.Product!.IsActive &&
+                x.InventoryItem != null &&
+                x.InventoryItem.IsStockTracked &&
+                !x.InventoryItem.IsExpenseOnly &&
+                x.InventoryItem.AllowRecipeConsumption &&
+                x.InventoryItem.ConsumptionMode == ConsumptionMode.RecipeConsumption)
             .ToListAsync();
 
         var requiredByItem = recipeIngredients

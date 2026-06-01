@@ -152,6 +152,14 @@ public class PreparationRecipesController : Controller
                 ModelState.AddModelError(string.Empty, "One or more inventory items do not belong to the active branch.");
             }
 
+            foreach (var ingredient in model.Ingredients)
+            {
+                if (items.TryGetValue(ingredient.InventoryItemId, out var item) && (item.IsExpenseOnly || !item.IsStockTracked))
+                {
+                    ModelState.AddModelError(string.Empty, $"{item.Name} cannot be used in prepared inventory because it is not stock tracked.");
+                }
+            }
+
             if (items.TryGetValue(model.OutputInventoryItemId, out var outputItem) && !outputItem.IsPreparedItem)
             {
                 ModelState.AddModelError(nameof(model.OutputInventoryItemId), "Output item must be marked as a prepared item.");
@@ -164,12 +172,12 @@ public class PreparationRecipesController : Controller
     private async Task PopulateInventoryItemsAsync(int branchId)
     {
         ViewBag.InventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly)
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();
         ViewBag.InventoryItemModels = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly)
             .OrderBy(x => x.Name)
             .ToListAsync();
     }

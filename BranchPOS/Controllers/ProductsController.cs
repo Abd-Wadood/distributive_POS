@@ -96,6 +96,7 @@ public class ProductsController : Controller
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
         var recipeItems = await ValidateRecipeItemsAsync(model, branchId);
+        await ValidateDirectSaleAsync(model, branchId, recipeItems.Count);
 
         if (!ModelState.IsValid)
         {
@@ -105,7 +106,14 @@ public class ProductsController : Controller
         try
         {
             await _productService.CreateProductAsync(
-                new Product { Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
+                new Product
+                {
+                    Name = model.Name,
+                    Price = model.Price,
+                    CategoryId = model.CategoryId,
+                    DirectInventoryItemId = model.DirectInventoryItemId,
+                    DirectQuantityBase = model.DirectQuantityBase
+                },
                 recipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired!.Value));
         }
         catch (InvalidOperationException ex)
@@ -131,7 +139,9 @@ public class ProductsController : Controller
             Id = product.Id,
             Name = product.Name,
             Price = product.Price,
-            CategoryId = product.CategoryId
+            CategoryId = product.CategoryId,
+            DirectInventoryItemId = product.DirectInventoryItemId,
+            DirectQuantityBase = product.DirectQuantityBase
         };
 
         return View(await BuildProductModelAsync(model, product));
@@ -147,6 +157,7 @@ public class ProductsController : Controller
 
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
         var recipeItems = await ValidateRecipeItemsAsync(model, branchId);
+        await ValidateDirectSaleAsync(model, branchId, recipeItems.Count);
 
         if (!ModelState.IsValid)
         {
@@ -156,7 +167,15 @@ public class ProductsController : Controller
         try
         {
             await _productService.UpdateProductAsync(
-                new Product { Id = model.Id, Name = model.Name, Price = model.Price, CategoryId = model.CategoryId },
+                new Product
+                {
+                    Id = model.Id,
+                    Name = model.Name,
+                    Price = model.Price,
+                    CategoryId = model.CategoryId,
+                    DirectInventoryItemId = model.DirectInventoryItemId,
+                    DirectQuantityBase = model.DirectQuantityBase
+                },
                 recipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired!.Value));
         }
         catch (InvalidOperationException ex)
@@ -207,7 +226,14 @@ public class ProductsController : Controller
 
         var inventoryIds = model.RecipeItems.Select(x => x.InventoryItemId).Where(x => x > 0).Distinct().ToList();
         var inventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive && inventoryIds.Contains(x.Id))
+            .Where(x =>
+                x.BranchId == branchId &&
+                x.IsActive &&
+                x.IsStockTracked &&
+                !x.IsExpenseOnly &&
+                x.AllowRecipeConsumption &&
+                x.ConsumptionMode == ConsumptionMode.RecipeConsumption &&
+                inventoryIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id);
         var normalized = new List<RecipeItemQuantityViewModel>();
 
@@ -248,6 +274,38 @@ public class ProductsController : Controller
         }
 
         return normalized;
+    }
+
+    private async Task ValidateDirectSaleAsync(ProductEditViewModel model, int branchId, int recipeItemCount)
+    {
+        if (!model.DirectInventoryItemId.HasValue)
+        {
+            model.DirectQuantityBase = null;
+            return;
+        }
+
+        if (recipeItemCount > 0)
+        {
+            ModelState.AddModelError(nameof(model.DirectInventoryItemId), "Direct sale products cannot also use recipe ingredients.");
+        }
+
+        if (!model.DirectQuantityBase.HasValue || model.DirectQuantityBase <= 0)
+        {
+            ModelState.AddModelError(nameof(model.DirectQuantityBase), "Direct sale quantity must be greater than zero.");
+        }
+
+        var item = await _context.InventoryItems
+            .FirstOrDefaultAsync(x => x.Id == model.DirectInventoryItemId.Value && x.BranchId == branchId && x.IsActive);
+        if (item is null)
+        {
+            ModelState.AddModelError(nameof(model.DirectInventoryItemId), "Direct sale inventory item must be active and belong to the active branch.");
+            return;
+        }
+
+        if (item.ConsumptionMode != ConsumptionMode.DirectSale || !item.IsStockTracked || item.IsExpenseOnly)
+        {
+            ModelState.AddModelError(nameof(model.DirectInventoryItemId), "Direct sale inventory item must use DirectSale consumption mode.");
+        }
     }
 
     private static void FillRecipeItemDisplayFields(ProductEditViewModel model, Dictionary<int, InventoryItem> inventoryItems)

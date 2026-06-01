@@ -6,7 +6,9 @@ public enum InventoryMovementType
     Transfer,
     StockRoomToKitchenDispatch,
     Consumption,
+    ManualConsumption,
     Production,
     Waste,
+    Wastage,
     Adjustment
 }

@@ -113,14 +113,15 @@ public class InventoryAdjustmentsController : Controller
     private async Task PopulateCreateLookupsAsync()
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        ViewBag.InventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive)
+        var inventoryItems = await _context.InventoryItems
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly)
             .OrderBy(x => x.Name)
-            .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();
-        ViewBag.UnitOptions = InventoryUnitCatalog.GetOptions()
-            .Select(x => new SelectListItem(x.DisplayName, x.DisplayName))
+
+        ViewBag.InventoryItems = inventoryItems
+            .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToList();
+        ViewBag.InventoryItemBaseUnits = inventoryItems.ToDictionary(x => x.Id, x => x.BaseUnit);
     }
 
     private bool CanReviewAdjustments() =>

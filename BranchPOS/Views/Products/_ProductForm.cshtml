@@ -3,7 +3,7 @@
     var inventoryItems = Model.InventoryItems;
 }
 
-<form method="post" id="productForm">
+<form asp-action="@(Model.Id == 0 ? "Create" : "Edit")" asp-route-id="@(Model.Id == 0 ? null : Model.Id)" method="post" id="productForm">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <input asp-for="Id" type="hidden" />
     <div class="mb-3">
@@ -23,9 +23,30 @@
         </select>
         <span asp-validation-for="CategoryId" class="text-danger"></span>
     </div>
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <label asp-for="DirectInventoryItemId" class="form-label">Direct sale stock item</label>
+            <select asp-for="DirectInventoryItemId" class="form-select" id="directInventoryItemSelect">
+                <option value="">No direct stock deduction</option>
+                @foreach (var item in inventoryItems.Where(x => x.ConsumptionMode == BranchPOS.Models.ConsumptionMode.DirectSale))
+                {
+                    <option value="@item.Id" selected="@(Model.DirectInventoryItemId == item.Id)" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
+                }
+            </select>
+            <span asp-validation-for="DirectInventoryItemId" class="text-danger"></span>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="DirectQuantityBase" class="form-label">Direct quantity per sale</label>
+            <input asp-for="DirectQuantityBase" class="form-control" type="number" step="0.001" id="directQuantityInput" />
+            <span asp-validation-for="DirectQuantityBase" class="text-danger"></span>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <div class="form-text" id="directSaleHelp"></div>
+        </div>
+    </div>
 
-    <h2 class="h4">Recipe Ingredients</h2>
-    <table class="table align-middle">
+    <h2 class="h4 recipe-section">Recipe Ingredients</h2>
+    <table class="table align-middle recipe-section">
         <thead>
             <tr>
                 <th>Inventory item</th>
@@ -41,7 +62,7 @@
                 <td>
                     <select name="RecipeItems[@i].InventoryItemId" class="form-select inventory-item-select">
                         <option value="">Select item</option>
-                        @foreach (var item in inventoryItems)
+                        @foreach (var item in inventoryItems.Where(x => x.ConsumptionMode == BranchPOS.Models.ConsumptionMode.RecipeConsumption && x.AllowRecipeConsumption && x.IsStockTracked && !x.IsExpenseOnly))
                         {
                             <option value="@item.Id" selected="@(Model.RecipeItems[i].InventoryItemId == item.Id)" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
                         }
@@ -58,7 +79,7 @@
         }
         </tbody>
     </table>
-    <div class="mb-3">
+    <div class="mb-3 recipe-section">
         <button class="btn btn-outline-primary" type="button" id="addIngredientButton">Add ingredient</button>
     </div>
 
@@ -71,7 +92,7 @@
         <td>
             <select class="form-select inventory-item-select">
                 <option value="">Select item</option>
-                @foreach (var item in inventoryItems)
+                @foreach (var item in inventoryItems.Where(x => x.ConsumptionMode == BranchPOS.Models.ConsumptionMode.RecipeConsumption && x.AllowRecipeConsumption && x.IsStockTracked && !x.IsExpenseOnly))
                 {
                     <option value="@item.Id" data-base-unit="@item.BaseUnit">@item.Name (@item.BaseUnit)</option>
                 }
@@ -87,6 +108,11 @@
     (() => {
         const rows = document.getElementById('recipeItemRows');
         const template = document.getElementById('recipeItemRowTemplate');
+        const directItem = document.getElementById('directInventoryItemSelect');
+        const directQuantity = document.getElementById('directQuantityInput');
+        const directHelp = document.getElementById('directSaleHelp');
+        const recipeSections = document.querySelectorAll('.recipe-section');
+        const recipeControls = () => rows.querySelectorAll('select, input, button');
 
         const updateUnitLabel = row => {
             const option = row.querySelector('.inventory-item-select')?.selectedOptions[0];
@@ -118,7 +144,22 @@
             refreshRowNames();
         });
 
+        const syncDirectSale = () => {
+            const selected = directItem?.selectedOptions[0];
+            const hasDirect = !!selected?.value;
+            recipeSections.forEach(x => x.classList.toggle('d-none', hasDirect));
+            recipeControls().forEach(x => x.disabled = hasDirect);
+            if (hasDirect) {
+                directQuantity.placeholder = selected.dataset.baseUnit ? `per sale in ${selected.dataset.baseUnit}` : '';
+                directHelp.textContent = selected.dataset.baseUnit ? `Deducts from stock as ${selected.dataset.baseUnit}.` : '';
+            } else {
+                directHelp.textContent = '';
+            }
+        };
+
         rows.querySelectorAll('.recipe-item-row').forEach(wireRow);
+        directItem?.addEventListener('change', syncDirectSale);
         refreshRowNames();
+        syncDirectSale();
     })();
 </script>

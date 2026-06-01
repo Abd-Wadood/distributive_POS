@@ -129,6 +129,8 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IRestaurantInventoryService, RestaurantInventoryService>();
 builder.Services.AddScoped<IInventoryTransactionService, InventoryTransactionService>();
 builder.Services.AddScoped<IInventoryAdjustmentService, InventoryAdjustmentService>();
+builder.Services.AddScoped<IManualKitchenUsageService, ManualKitchenUsageService>();
+builder.Services.AddScoped<IStockCountService, StockCountService>();
 builder.Services.AddScoped<IPreparationService, PreparationService>();
 builder.Services.AddScoped<IPurchaseService, PurchaseService>();
 builder.Services.AddScoped<IOrderService, OrderService>();

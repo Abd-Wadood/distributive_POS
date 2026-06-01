@@ -67,6 +67,78 @@ public class InventoryReportsController : Controller
 
     public async Task<IActionResult> Profit(DateTime? from, DateTime? to) => View(await _restaurantInventoryService.BuildProfitReportAsync(from, to));
 
+    public async Task<IActionResult> ControlModes()
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var items = await _context.InventoryItems
+            .AsNoTracking()
+            .Where(x => x.BranchId == branchId)
+            .OrderBy(x => x.ConsumptionMode)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
+        return View(items);
+    }
+
+    public async Task<IActionResult> ManualUsage()
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var usages = await _context.ManualKitchenUsages
+            .AsNoTracking()
+            .Include(x => x.InventoryItem)
+            .Include(x => x.CreatedByUser)
+            .Where(x => x.BranchId == branchId)
+            .OrderByDescending(x => x.UsageDate)
+            .ThenByDescending(x => x.Id)
+            .Take(500)
+            .ToListAsync();
+        return View(usages);
+    }
+
+    public async Task<IActionResult> PeriodicCountVariance()
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var counts = await _context.StockCounts
+            .AsNoTracking()
+            .Include(x => x.InventoryItem)
+            .Where(x => x.BranchId == branchId)
+            .OrderByDescending(x => x.CountDate)
+            .ThenByDescending(x => x.Id)
+            .Take(500)
+            .ToListAsync();
+        return View(counts);
+    }
+
+    public async Task<IActionResult> ExpenseOnlyPurchases()
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var lines = await _context.PurchaseItems
+            .AsNoTracking()
+            .Include(x => x.Purchase)
+            .Include(x => x.InventoryItem)
+            .Where(x => x.BranchId == branchId && x.IsExpenseOnly)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(500)
+            .ToListAsync();
+        return View(lines);
+    }
+
+    public async Task<IActionResult> RecipeConsumption()
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
+        var movements = await _context.InventoryMovements
+            .AsNoTracking()
+            .Include(x => x.InventoryItem)
+            .Include(x => x.FromLocation)
+            .Where(x =>
+                x.BranchId == branchId &&
+                x.MovementType == InventoryMovementType.Consumption &&
+                x.ReferenceType == nameof(Order))
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(500)
+            .ToListAsync();
+        return View(movements);
+    }
+
     private async Task PopulatePreparedRecipeOutputQuantitiesAsync()
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();

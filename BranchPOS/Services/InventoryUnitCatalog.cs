@@ -7,11 +7,18 @@ public static class InventoryUnitCatalog
     public const string Gram = "Gram";
     public const string ML = "ML";
     public const string Piece = "Piece";
+    public const string None = "None";
 
     private static readonly List<InventoryUnitOption> Options =
     [
+        new("None", None, 1m, false),
+
         new("Gram", Gram, 1m, false),
         new("Kg", Gram, 1000m, false),
+        new("Packet", Gram, null, true),
+        new("Tin", Gram, null, true),
+        new("Jar", Gram, null, true),
+        new("Piece/Block", Gram, null, true),
         new("5kg Bag", Gram, 5000m, false),
         new("10kg Bag", Gram, 10000m, false),
         new("20kg Bag", Gram, 20000m, false),
@@ -20,6 +27,11 @@ public static class InventoryUnitCatalog
 
         new("ML", ML, 1m, false),
         new("Liter", ML, 1000m, false),
+        new("Packet", ML, null, true),
+        new("Tin", ML, null, true),
+        new("Bottle/Crate", ML, null, true),
+        new("Liter Pack", ML, 1000m, false),
+        new("5 Liter Tin", ML, 5000m, false),
         new("1L Bottle", ML, 1000m, false),
         new("5L Can", ML, 5000m, false),
         new("10L Can", ML, 10000m, false),
@@ -30,10 +42,14 @@ public static class InventoryUnitCatalog
         new("Box", Piece, null, true),
         new("Carton", Piece, null, true),
         new("Crate", Piece, null, true),
-        new("Bundle", Piece, null, true)
+        new("Bundle", Piece, null, true),
+        new("Roll", Piece, null, true),
+        new("Batch", Piece, null, true),
+        new("Tray", Piece, null, true),
+        new("Refill", Piece, null, true)
     ];
 
-    public static IReadOnlyList<string> SupportedBaseUnits { get; } = [Gram, ML, Piece];
+    public static IReadOnlyList<string> SupportedBaseUnits { get; } = [Gram, ML, Piece, None];
 
     public static IReadOnlyList<InventoryUnitOption> GetOptions() => Options;
 
@@ -52,7 +68,7 @@ public static class InventoryUnitCatalog
         var normalizedBaseUnit = NormalizeBaseUnit(baseUnit);
         if (!SupportedBaseUnits.Contains(normalizedBaseUnit))
         {
-            throw new PosValidationException("Base unit must be Gram, ML, or Piece.");
+            throw new PosValidationException("Base unit must be Gram, ML, Piece, or None.");
         }
 
         if (string.IsNullOrWhiteSpace(purchaseUnitName))

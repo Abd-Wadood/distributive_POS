@@ -1,0 +1,22 @@
+@model IEnumerable<BranchPOS.Models.PurchaseItem>
+@{
+    ViewData["Title"] = "Expense Only Purchases";
+}
+
+<h1>Expense Only Purchases</h1>
+<table class="table table-sm align-middle">
+    <thead><tr><th>Date</th><th>Item</th><th>Unit</th><th class="text-end">Qty</th><th class="text-end">Cost</th><th>Notes</th></tr></thead>
+    <tbody>
+    @foreach (var line in Model)
+    {
+        <tr>
+            <td>@line.CreatedAt.ToString("yyyy-MM-dd")</td>
+            <td>@line.InventoryItem?.Name</td>
+            <td>@line.PurchaseUnitName</td>
+            <td class="text-end">@line.PurchaseQuantity.ToString("0.###")</td>
+            <td class="text-end">@line.TotalCost.ToString("0.00")</td>
+            <td>@line.Notes</td>
+        </tr>
+    }
+    </tbody>
+</table>
