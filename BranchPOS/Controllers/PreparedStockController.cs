@@ -40,111 +40,25 @@ public class PreparedStockController : Controller
 
     public async Task<IActionResult> Add(int? preparationRecipeId, int? recipeId)
     {
-        if (await _userSessionService.GetActiveSessionAsync(GetUserId()) is null)
+        await Task.CompletedTask;
+        return RedirectToAction("Create", "InventoryAdjustments", new
         {
-            return RedirectToAction("Index", "Sessions");
-        }
-
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        return View(await BuildBatchModelAsync(branchId, preparationRecipeId ?? recipeId, null, null, Guid.NewGuid().ToString("N")));
+            locationType = InventoryLocationType.StockRoom,
+            adjustmentType = InventoryAdjustmentType.CorrectionIncrease,
+            reason = "Internal Preparation"
+        });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Add(PreparationBatchViewModel model)
     {
-        var session = await _userSessionService.GetActiveSessionAsync(GetUserId());
-        if (session is null)
+        await Task.CompletedTask;
+        return RedirectToAction("Create", "InventoryAdjustments", new
         {
-            TempData["Error"] = "Start or continue an active stock session before completing preparation batches.";
-            return RedirectToAction("Index", "Sessions");
-        }
-
-        if (!model.PreparationRecipeId.HasValue)
-        {
-            ModelState.AddModelError(nameof(model.PreparationRecipeId), "Preparation recipe is required.");
-        }
-
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        var recipe = model.PreparationRecipeId.HasValue
-            ? await _context.PreparationRecipes
-                .Include(x => x.OutputInventoryItem)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == model.PreparationRecipeId.Value && x.BranchId == branchId && x.IsActive)
-            : null;
-
-        if (model.PreparationRecipeId.HasValue && recipe is null)
-        {
-            ModelState.AddModelError(nameof(model.PreparationRecipeId), "Preparation recipe was not found.");
-        }
-
-        if (recipe?.OutputInventoryItem is not null)
-        {
-            var usesRecipeOutputCount = !string.Equals(recipe.OutputInventoryItem.BaseUnit, "Piece", StringComparison.OrdinalIgnoreCase);
-            if (usesRecipeOutputCount)
-            {
-                if (!model.PreparedItemCount.HasValue || model.PreparedItemCount <= 0)
-                {
-                    ModelState.AddModelError(nameof(model.PreparedItemCount), "Prepared quantity must be greater than zero.");
-                }
-                else
-                {
-                    model.OutputQuantityBase = model.PreparedItemCount.Value * recipe.OutputQuantityBase;
-                }
-            }
-            else if (!model.OutputQuantityBase.HasValue || model.OutputQuantityBase <= 0)
-            {
-                ModelState.AddModelError(nameof(model.OutputQuantityBase), "Actual output quantity must be greater than zero.");
-            }
-
-            if (!recipe.OutputInventoryItem.IsActive || !recipe.OutputInventoryItem.IsPreparedItem)
-            {
-                ModelState.AddModelError(nameof(model.PreparationRecipeId), "Selected recipe output item is not available.");
-            }
-
-            if (!usesRecipeOutputCount &&
-                model.OutputQuantityBase.HasValue &&
-                model.OutputQuantityBase.Value != decimal.Truncate(model.OutputQuantityBase.Value))
-            {
-                ModelState.AddModelError(nameof(model.OutputQuantityBase), "Actual output quantity must be a whole number for piece-based prepared items.");
-            }
-        }
-        else if (!model.OutputQuantityBase.HasValue || model.OutputQuantityBase <= 0)
-        {
-            ModelState.AddModelError(nameof(model.OutputQuantityBase), "Actual output quantity must be greater than zero.");
-        }
-
-        if (!ModelState.IsValid)
-        {
-            return View(await BuildBatchModelAsync(branchId, model.PreparationRecipeId, model.Notes, model.OutputQuantityBase, model.IdempotencyKey));
-        }
-
-        try
-        {
-            var terminal = await _terminalContextService.RequireCurrentTerminalFreshAsync();
-            await _preparationService.CompletePreparationBatchAsync(new CompletePreparationBatchDto
-            {
-                IdempotencyKey = string.IsNullOrWhiteSpace(model.IdempotencyKey) ? _idempotencyService.GetOrCreateKey() : model.IdempotencyKey,
-                UserSessionId = session.Id,
-                TerminalId = terminal.Id,
-                TerminalCode = terminal.TerminalCode,
-                PreparationRecipeId = model.PreparationRecipeId!.Value,
-                OutputQuantityBase = model.OutputQuantityBase!.Value,
-                CreatedByUserId = GetUserId(),
-                Notes = model.Notes
-            });
-            TempData["Message"] = "Prepared item added to Stock Room.";
-            return RedirectToAction("StockRoom", "InventoryReports");
-        }
-        catch (BranchPosException ex)
-        {
-            TempData["Error"] = ex.UserMessage;
-            return View(await BuildBatchModelAsync(branchId, model.PreparationRecipeId, model.Notes, model.OutputQuantityBase, model.IdempotencyKey));
-        }
-        catch (InvalidOperationException ex)
-        {
-            TempData["Error"] = ex.Message;
-            return View(await BuildBatchModelAsync(branchId, model.PreparationRecipeId, model.Notes, model.OutputQuantityBase, model.IdempotencyKey));
-        }
+            locationType = InventoryLocationType.StockRoom,
+            adjustmentType = InventoryAdjustmentType.CorrectionIncrease,
+            reason = "Internal Preparation"
+        });
     }
 
     private async Task<PreparationBatchViewModel> BuildBatchModelAsync(int branchId, int? selectedRecipeId, string? notes, decimal? outputQuantityBase, string? idempotencyKey)

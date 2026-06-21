@@ -35,7 +35,8 @@ public class InventoryItemsController : Controller
             BaseUnit = InventoryUnitCatalog.Gram,
             PurchaseUnitName = "Gram",
             DefaultConversionFactorToBase = 1m,
-            ConsumptionMode = ConsumptionMode.ManualKitchenIssue
+            IsStockTracked = true,
+            IsActive = true
         });
     }
 
@@ -172,25 +173,10 @@ public class InventoryItemsController : Controller
     private static void Clean(InventoryItem item)
     {
         item.Name = (item.Name ?? string.Empty).Trim();
-        InventoryControlDefaults.ApplyDefaults(item);
-        if (item.IsExpenseOnly)
-        {
-            item.BaseUnit = InventoryUnitCatalog.None;
-            item.PurchaseUnitName = null;
-            item.DefaultConversionFactorToBase = null;
-            return;
-        }
+        ApplyLegacyCompatibilityDefaults(item);
 
         item.BaseUnit = InventoryUnitCatalog.NormalizeBaseUnit(item.BaseUnit);
         item.PurchaseUnitName = string.IsNullOrWhiteSpace(item.PurchaseUnitName) ? null : item.PurchaseUnitName.Trim();
-        if (item.IsPreparedItem &&
-            item.BaseUnit == InventoryUnitCatalog.Piece &&
-            (string.IsNullOrWhiteSpace(item.PurchaseUnitName) || item.PurchaseUnitName == InventoryUnitCatalog.Piece) &&
-            (!item.DefaultConversionFactorToBase.HasValue || item.DefaultConversionFactorToBase <= 0))
-        {
-            item.PurchaseUnitName = InventoryUnitCatalog.Piece;
-            item.DefaultConversionFactorToBase = 1m;
-        }
 
         if (item.ReorderLevel < 0)
         {
@@ -208,13 +194,20 @@ public class InventoryItemsController : Controller
         }
     }
 
+    private static void ApplyLegacyCompatibilityDefaults(InventoryItem item)
+    {
+        item.IsPreparedItem = false;
+        item.IsExpenseOnly = false;
+        item.AllowRecipeConsumption = true;
+        item.AllowManualConsumption = true;
+        item.AllowKitchenDispatch = true;
+        item.RequirePurchaseConversion = true;
+        item.TrackingLevel = TrackingLevel.High;
+        item.ConsumptionMode = ConsumptionMode.RecipeConsumption;
+    }
+
     private void ValidateUnitFields(InventoryItem item)
     {
-        if (item.IsExpenseOnly)
-        {
-            return;
-        }
-
         try
         {
             item.DefaultConversionFactorToBase = InventoryUnitCatalog.ValidateAndNormalize(item.BaseUnit, item.PurchaseUnitName, item.DefaultConversionFactorToBase);
@@ -254,6 +247,5 @@ public class InventoryItemsController : Controller
     {
         ViewBag.BaseUnits = InventoryUnitCatalog.SupportedBaseUnits;
         ViewBag.UnitOptions = InventoryUnitCatalog.GetOptions();
-        ViewBag.ConsumptionModes = Enum.GetValues<ConsumptionMode>();
     }
 }

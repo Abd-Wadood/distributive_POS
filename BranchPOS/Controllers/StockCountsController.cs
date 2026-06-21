@@ -64,9 +64,8 @@ public class StockCountsController : Controller
         ViewBag.InventoryItems = await _context.InventoryItems
             .AsNoTracking()
             .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly)
-            .OrderBy(x => x.ConsumptionMode)
-            .ThenBy(x => x.Name)
-            .Select(x => new SelectListItem($"{x.Name} ({x.ConsumptionMode}, {x.BaseUnit})", x.Id.ToString()))
+            .OrderBy(x => x.Name)
+            .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();
     }
 

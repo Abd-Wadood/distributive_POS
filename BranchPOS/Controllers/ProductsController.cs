@@ -96,7 +96,7 @@ public class ProductsController : Controller
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
         var recipeItems = await ValidateRecipeItemsAsync(model, branchId);
-        await ValidateDirectSaleAsync(model, branchId, recipeItems.Count);
+        ClearLegacyDirectSaleFields(model);
 
         if (!ModelState.IsValid)
         {
@@ -111,8 +111,8 @@ public class ProductsController : Controller
                     Name = model.Name,
                     Price = model.Price,
                     CategoryId = model.CategoryId,
-                    DirectInventoryItemId = model.DirectInventoryItemId,
-                    DirectQuantityBase = model.DirectQuantityBase
+                    DirectInventoryItemId = null,
+                    DirectQuantityBase = null
                 },
                 recipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired!.Value));
         }
@@ -140,8 +140,8 @@ public class ProductsController : Controller
             Name = product.Name,
             Price = product.Price,
             CategoryId = product.CategoryId,
-            DirectInventoryItemId = product.DirectInventoryItemId,
-            DirectQuantityBase = product.DirectQuantityBase
+            DirectInventoryItemId = null,
+            DirectQuantityBase = null
         };
 
         return View(await BuildProductModelAsync(model, product));
@@ -157,7 +157,7 @@ public class ProductsController : Controller
 
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
         var recipeItems = await ValidateRecipeItemsAsync(model, branchId);
-        await ValidateDirectSaleAsync(model, branchId, recipeItems.Count);
+        ClearLegacyDirectSaleFields(model);
 
         if (!ModelState.IsValid)
         {
@@ -173,8 +173,8 @@ public class ProductsController : Controller
                     Name = model.Name,
                     Price = model.Price,
                     CategoryId = model.CategoryId,
-                    DirectInventoryItemId = model.DirectInventoryItemId,
-                    DirectQuantityBase = model.DirectQuantityBase
+                    DirectInventoryItemId = null,
+                    DirectQuantityBase = null
                 },
                 recipeItems.ToDictionary(x => x.InventoryItemId, x => x.QuantityRequired!.Value));
         }
@@ -209,6 +209,12 @@ public class ProductsController : Controller
                 .OrderBy(x => x.InventoryItem!.Name)
                 .Select(x => RecipeItemQuantityViewModel.FromInventoryItem(x.InventoryItem!, x.QuantityRequiredBase))
                 .ToList() ?? [];
+            if (model.RecipeItems.Count == 0 &&
+                product.DirectInventoryItem is not null &&
+                product.DirectQuantityBase is > 0m)
+            {
+                model.RecipeItems.Add(RecipeItemQuantityViewModel.FromInventoryItem(product.DirectInventoryItem, product.DirectQuantityBase.Value));
+            }
         }
 
         FillRecipeItemDisplayFields(model, model.InventoryItems.ToDictionary(x => x.Id));
@@ -231,8 +237,6 @@ public class ProductsController : Controller
                 x.IsActive &&
                 x.IsStockTracked &&
                 !x.IsExpenseOnly &&
-                x.AllowRecipeConsumption &&
-                x.ConsumptionMode == ConsumptionMode.RecipeConsumption &&
                 inventoryIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id);
         var normalized = new List<RecipeItemQuantityViewModel>();
@@ -276,36 +280,10 @@ public class ProductsController : Controller
         return normalized;
     }
 
-    private async Task ValidateDirectSaleAsync(ProductEditViewModel model, int branchId, int recipeItemCount)
+    private static void ClearLegacyDirectSaleFields(ProductEditViewModel model)
     {
-        if (!model.DirectInventoryItemId.HasValue)
-        {
-            model.DirectQuantityBase = null;
-            return;
-        }
-
-        if (recipeItemCount > 0)
-        {
-            ModelState.AddModelError(nameof(model.DirectInventoryItemId), "Direct sale products cannot also use recipe ingredients.");
-        }
-
-        if (!model.DirectQuantityBase.HasValue || model.DirectQuantityBase <= 0)
-        {
-            ModelState.AddModelError(nameof(model.DirectQuantityBase), "Direct sale quantity must be greater than zero.");
-        }
-
-        var item = await _context.InventoryItems
-            .FirstOrDefaultAsync(x => x.Id == model.DirectInventoryItemId.Value && x.BranchId == branchId && x.IsActive);
-        if (item is null)
-        {
-            ModelState.AddModelError(nameof(model.DirectInventoryItemId), "Direct sale inventory item must be active and belong to the active branch.");
-            return;
-        }
-
-        if (item.ConsumptionMode != ConsumptionMode.DirectSale || !item.IsStockTracked || item.IsExpenseOnly)
-        {
-            ModelState.AddModelError(nameof(model.DirectInventoryItemId), "Direct sale inventory item must use DirectSale consumption mode.");
-        }
+        model.DirectInventoryItemId = null;
+        model.DirectQuantityBase = null;
     }
 
     private static void FillRecipeItemDisplayFields(ProductEditViewModel model, Dictionary<int, InventoryItem> inventoryItems)

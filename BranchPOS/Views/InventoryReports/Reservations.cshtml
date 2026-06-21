@@ -1,0 +1,65 @@
+@model BranchPOS.ViewModels.ReservationAuditViewModel
+@{
+    ViewData["Title"] = "Reservation Audit";
+}
+
+<h1>Reservation Audit</h1>
+
+<h2 class="h4 mt-4">Reserved stock check</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Location</th>
+            <th>Item</th>
+            <th class="text-end">Stock reserved</th>
+            <th class="text-end">Active reservations</th>
+            <th class="text-end">Difference</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var row in Model.Rows)
+    {
+        var mismatch = row.Difference != 0;
+        <tr class="@(mismatch ? "table-warning" : "")">
+            <td>@row.LocationName</td>
+            <td>@row.ItemName</td>
+            <td class="text-end">@row.StockReservedQuantity.ToString("0.###")</td>
+            <td class="text-end">@row.ActiveReservationQuantity.ToString("0.###")</td>
+            <td class="text-end">@row.Difference.ToString("0.###")</td>
+            <td>@(mismatch ? "Review required" : "OK")</td>
+        </tr>
+    }
+    @if (Model.Rows.Count == 0)
+    {
+        <tr><td colspan="6" class="text-muted">No active reservations.</td></tr>
+    }
+    </tbody>
+</table>
+
+<h2 class="h4 mt-4">Overdue pending orders</h2>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Order</th>
+            <th>Cashier</th>
+            <th>Created</th>
+            <th class="text-end">Total</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var order in Model.OverdueOrders)
+    {
+        <tr>
+            <td>@order.OrderNumber</td>
+            <td>@order.CashierName</td>
+            <td>@order.CreatedAt.ToLocalTime()</td>
+            <td class="text-end">@CurrencyFormatter.Format(order.TotalAmount)</td>
+        </tr>
+    }
+    @if (Model.OverdueOrders.Count == 0)
+    {
+        <tr><td colspan="4" class="text-muted">No overdue pending reserved orders.</td></tr>
+    }
+    </tbody>
+</table>

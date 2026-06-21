@@ -12,7 +12,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
             <h1 class="mb-0">POS Order</h1>
-            <small class="text-muted">Completed sales deduct ingredient inventory. Drafts do not.</small>
+            <small class="text-muted">Punch the order once. Stock is deducted immediately and kitchen token plus receipt are printed.</small>
         </div>
         <div class="d-flex gap-2">
             <button id="newOrderBtn" type="button" class="btn btn-outline-primary">New order</button>
@@ -95,7 +95,8 @@
                         <span>Total</span>
                         <strong id="totalText">0.00</strong>
                     </div>
-                    <button id="finalizeOrderBtn" type="button" class="btn btn-success w-100">Finalize sale</button>
+                    <button id="finalizeOrderBtn" type="button" class="btn btn-success w-100">Punch Order</button>
+                    <div class="form-text text-center">Deducts stock and queues kitchen token plus receipt.</div>
                 </div>
             </div>
         </div>
@@ -113,6 +114,7 @@ let activeOrderId = null;
 let selectedCategoryId = 'all';
 let searchTerm = '';
 let searchDebounceTimer = null;
+let submittingOrderId = null;
 
 function normalizeProduct(product) {
     return {
@@ -173,6 +175,51 @@ function showMessage(message, type = 'danger') {
     window.setTimeout(() => box.classList.add('d-none'), 5000);
 }
 
+function cloneOrder(order) {
+    return JSON.parse(JSON.stringify(order));
+}
+
+function setOrderEntryDisabled(disabled) {
+    document.querySelectorAll('#orderTabs button, #newOrderBtn, #holdOrderBtn, #cancelOrderBtn, #orderType, #tableNumber, #customerPhone, #customerName, #customerAddress, #orderNotes, #discountAmount, .product-qty, .cart-qty, .cart-plus, .cart-minus, .cart-remove, .qty-minus')
+        .forEach(element => {
+            element.disabled = disabled;
+        });
+}
+
+function getOrderSubtotal(order) {
+    return Object.entries(order.items).reduce((total, [productId, quantity]) => {
+        const product = products.find(p => p.Id === Number(productId));
+        return total + (product ? product.Price * Number(quantity || 0) : 0);
+    }, 0);
+}
+
+function validateOrderBeforeSubmit(order) {
+    const lines = Object.entries(order.items).filter(([, quantity]) => Number(quantity) > 0);
+    if (lines.length === 0) {
+        return 'Add at least one item before punching the order.';
+    }
+
+    for (const [productId, quantity] of lines) {
+        const product = products.find(p => p.Id === Number(productId));
+        if (!product) {
+            return 'One selected product is no longer available. Refresh the POS screen and try again.';
+        }
+        if (!product.IsAvailable) {
+            return `${product.Name} is unavailable right now. Refresh products before sending this order.`;
+        }
+        if (Number(quantity) <= 0) {
+            return 'All item quantities must be greater than zero.';
+        }
+    }
+
+    const subtotal = getOrderSubtotal(order);
+    if (Number(order.discountAmount || 0) > subtotal) {
+        return 'Discount cannot be greater than subtotal.';
+    }
+
+    return null;
+}
+
 function startNewOrder(seed) {
     const order = makeOrder(seed);
     orders.push(order);
@@ -190,7 +237,9 @@ function renderTabs() {
         button.type = 'button';
         button.className = `nav-link ${order.id === activeOrderId ? 'active' : ''}`;
         button.textContent = order.draftOrderId ? order.label : `Order ${index + 1}`;
+        button.disabled = submittingOrderId !== null;
         button.addEventListener('click', () => {
+            if (submittingOrderId !== null) return;
             saveFormToActive();
             activeOrderId = order.id;
             renderAll();
@@ -314,6 +363,7 @@ function renderAll() {
 }
 
 function setQuantity(productId, quantity) {
+    if (submittingOrderId !== null) return;
     const order = activeOrder();
     const product = products.find(p => p.Id === Number(productId));
     if (!product?.IsAvailable) return;
@@ -330,6 +380,7 @@ function buildPayload() {
     return {
         draftOrderId: order.draftOrderId,
         idempotencyKey: order.idempotencyKey,
+        clientRequestId: order.idempotencyKey,
         orderType: order.orderType,
         discountAmount: order.discountAmount,
         tableNumber: order.tableNumber,
@@ -369,7 +420,7 @@ async function refreshProducts() {
         renderProducts();
         renderCart();
     } catch {
-        // Availability refresh is best-effort; finalization still validates stock server-side.
+        // Availability refresh is best-effort; stock still validates server-side.
     }
 }
 
@@ -479,19 +530,57 @@ document.getElementById('cancelOrderBtn').addEventListener('click', async () => 
 
 document.getElementById('finalizeOrderBtn').addEventListener('click', async () => {
     const button = document.getElementById('finalizeOrderBtn');
+    const submittedOrderId = activeOrderId;
+    let receiptWindow = null;
+    saveFormToActive();
+    const submittedOrder = cloneOrder(activeOrder());
+    const validationMessage = validateOrderBeforeSubmit(activeOrder());
+    if (validationMessage) {
+        showMessage(validationMessage);
+        return;
+    }
+
     try {
+        submittingOrderId = submittedOrderId;
+        setOrderEntryDisabled(true);
+        renderTabs();
         button.disabled = true;
-        button.textContent = 'Processing...';
+        button.textContent = 'Sending...';
+        receiptWindow = window.open('', '_blank');
         const data = await postJson('/Orders/Finalize', buildPayload());
-        if (data.notification) {
-            showMessage(data.notification, 'warning');
-            window.setTimeout(() => window.location.href = data.receiptUrl, 900);
+        orders = orders.filter(x => x.id !== submittedOrderId);
+        activeOrderId = orders[0]?.id ?? null;
+        button.disabled = false;
+        button.textContent = 'Punch Order';
+        submittingOrderId = null;
+        setOrderEntryDisabled(false);
+        renderAll();
+        await refreshProducts();
+        if (data.receiptUrl && receiptWindow) {
+            receiptWindow.location = data.receiptUrl;
+            showMessage(data.message || 'Order punched. Stock deducted. Printing kitchen token and receipt.', 'success');
+        } else if (data.receiptUrl) {
+            showMessage('Order punched. Stock deducted. Receipt popup was blocked, so open the receipt from the order screen.', 'warning');
         } else {
-            window.location.href = data.receiptUrl;
+            showMessage(data.message || 'Order punched. Stock deducted. Printing kitchen token and receipt.', 'success');
+        }
+        if (data.notification) {
+            window.setTimeout(() => showMessage(data.notification, 'warning'), 1200);
         }
     } catch (error) {
+        if (receiptWindow && !receiptWindow.closed) {
+            receiptWindow.close();
+        }
         button.disabled = false;
-        button.textContent = 'Finalize sale';
+        button.textContent = 'Punch Order';
+        submittingOrderId = null;
+        setOrderEntryDisabled(false);
+        activeOrderId = submittedOrderId;
+        const existing = orders.find(x => x.id === submittedOrderId);
+        if (existing) {
+            Object.assign(existing, submittedOrder);
+        }
+        renderAll();
         showMessage(error.message);
         await refreshProducts();
     }
@@ -506,6 +595,8 @@ document.getElementById('finalizeOrderBtn').addEventListener('click', async () =
 draftOrders.forEach(startNewOrder);
 if (orders.length === 0) startNewOrder();
 renderAll();
-window.setInterval(refreshProducts, 15000);
+window.setInterval(() => {
+    refreshProducts();
+}, 15000);
 </script>
 }

@@ -15,9 +15,10 @@ public class OrderService : IOrderService
     private readonly IBranchContextService _branchContextService;
     private readonly IIdempotencyService _idempotencyService;
     private readonly IInventoryTransactionService _inventoryTransactionService;
+    private readonly IOrderStockReservationService _reservationService;
     private const int MaxOrderItemQuantity = 10000;
 
-    public OrderService(AppDbContext context, ICustomerService customerService, IUserSessionService userSessionService, IBranchContextService branchContextService, IIdempotencyService idempotencyService, IInventoryTransactionService inventoryTransactionService)
+    public OrderService(AppDbContext context, ICustomerService customerService, IUserSessionService userSessionService, IBranchContextService branchContextService, IIdempotencyService idempotencyService, IInventoryTransactionService inventoryTransactionService, IOrderStockReservationService reservationService)
     {
         _context = context;
         _customerService = customerService;
@@ -25,6 +26,7 @@ public class OrderService : IOrderService
         _branchContextService = branchContextService;
         _idempotencyService = idempotencyService;
         _inventoryTransactionService = inventoryTransactionService;
+        _reservationService = reservationService;
     }
 
     public async Task<List<Order>> GetOrdersAsync(CancellationToken cancellationToken = default)
@@ -72,6 +74,32 @@ public class OrderService : IOrderService
         SaveDraftAsync(dto, cancellationToken);
 
     public async Task<OrderResultDto> FinalizeOrderAsync(CreateOrderDto dto, CancellationToken cancellationToken = default)
+        => await PunchOrderAsync(dto, cancellationToken);
+
+    public async Task<OrderResultDto> PunchOrderAsync(CreateOrderDto dto, CancellationToken cancellationToken = default)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return await PunchOrderOnceAsync(dto, cancellationToken);
+            }
+            catch (Exception ex) when (DatabaseErrorTranslator.IsConcurrencyFailure(ex) && attempt < maxAttempts)
+            {
+                _context.ChangeTracker.Clear();
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+            }
+            catch (Exception ex) when (DatabaseErrorTranslator.IsConcurrencyFailure(ex))
+            {
+                throw DatabaseErrorTranslator.ToUserException(ex, "Stock changed while processing this order. Please try again.");
+            }
+        }
+
+        throw new BusinessException("Stock changed while processing this order. Please try again.");
+    }
+
+    private async Task<OrderResultDto> PunchOrderOnceAsync(CreateOrderDto dto, CancellationToken cancellationToken)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         try
@@ -124,13 +152,6 @@ public class OrderService : IOrderService
             var requestedItems = NormalizeItems(dto.Items);
             var customer = await _customerService.CreateOrUpdateCustomerAsync(dto.Customer, cancellationToken);
             var pricedItems = await BuildPricedItemsAsync(requestedItems, dto.BranchId, cancellationToken);
-            Dictionary<StockRequirementKey, RequiredInventoryItem> requiredInventoryItems = [];
-            Dictionary<StockRequirementKey, InventoryStock> lockedInventoryStocks = [];
-            var stockRoom = await _inventoryTransactionService.GetOrCreateLocationAsync(dto.BranchId, "Stock Room", cancellationToken);
-            var kitchen = await _inventoryTransactionService.GetOrCreateLocationAsync(dto.BranchId, "Kitchen", cancellationToken);
-            requiredInventoryItems = BuildRequiredInventoryItems(pricedItems, kitchen.Id, stockRoom.Id);
-            lockedInventoryStocks = await LockInventoryStocksAsync(requiredInventoryItems.Keys, dto.BranchId, cancellationToken);
-            ValidateStock(requiredInventoryItems, lockedInventoryStocks);
 
             var order = dto.DraftOrderId.HasValue
                 ? await _context.Orders.Include(x => x.Items).FirstOrDefaultAsync(x =>
@@ -152,13 +173,18 @@ public class OrderService : IOrderService
                 BranchId = dto.BranchId,
                 UserSessionId = dto.UserSessionId,
                 OrderNumber = await GenerateOrderNumberAsync(dto.BranchId, cancellationToken),
-                IdempotencyKey = dto.IdempotencyKey
+                IdempotencyKey = dto.IdempotencyKey,
+                ClientRequestId = ResolveClientRequestId(dto)
             };
             order.IdempotencyKey ??= dto.IdempotencyKey;
+            order.ClientRequestId ??= ResolveClientRequestId(dto);
 
-            ApplyOrderFields(order, orderType, OrderStatus.Completed, customer, dto);
+            ApplyOrderFields(order, orderType, OrderStatus.Pending, customer, dto);
             ReplaceOrderItems(order, pricedItems);
-            order.CompletedAt = DateTime.UtcNow;
+            order.CompletedAt = null;
+            order.InventoryState = OrderInventoryState.None;
+            order.PaymentStatus = ResolveInitialPaymentStatus(orderType);
+            order.PaymentMethod = order.PaymentStatus == PaymentStatus.CODPending ? "COD" : "Counter";
 
             if (order.Id == 0)
             {
@@ -166,39 +192,10 @@ public class OrderService : IOrderService
             }
 
             await _context.SaveChangesAsync(cancellationToken);
-
-            foreach (var required in requiredInventoryItems)
-            {
-                var mutation = await _inventoryTransactionService.DebitAsync(
-                    dto.BranchId,
-                    required.Key.InventoryItemId,
-                    required.Key.LocationId,
-                    required.Value.Quantity,
-                    required.Value.Name,
-                    required.Value.Unit,
-                    required.Key.LocationName,
-                    cancellationToken);
-                _inventoryTransactionService.AddMovement(new InventoryMovementRequest(
-                    dto.BranchId,
-                    required.Key.InventoryItemId,
-                    required.Key.LocationId,
-                    null,
-                    required.Value.Quantity,
-                    mutation.AverageUnitCostBase,
-                    required.Value.Quantity * mutation.AverageUnitCostBase,
-                    InventoryMovementType.Consumption,
-                    nameof(Order),
-                    order.Id,
-                    dto.UserSessionId,
-                    dto.TerminalId,
-                    dto.IdempotencyKey,
-                    dto.CashierId));
-            }
-
-            await _context.SaveChangesAsync(cancellationToken);
+            var result = await _reservationService.ConsumeImmediatelyForOrderAsync(order, cancellationToken);
             await _idempotencyService.CompleteAsync(idempotency.Record, nameof(Order), order.Id, StatusCodes.Status200OK, order.OrderNumber, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return ToResult(order);
+            return result;
         }
         catch (Exception ex) when (ex is BranchPosException)
         {
@@ -210,7 +207,7 @@ public class OrderService : IOrderService
         {
             await transaction.RollbackAsync(CancellationToken.None);
             _context.ChangeTracker.Clear();
-            throw DatabaseErrorTranslator.ToUserException(ex, "Order could not be completed. Please retry.");
+            throw;
         }
         catch (Exception ex) when (ex is not BranchPosException && DatabaseErrorTranslator.IsUniqueViolation(ex))
         {
@@ -243,6 +240,55 @@ public class OrderService : IOrderService
 
         order.OrderStatus = OrderStatus.Cancelled;
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<OrderResultDto> CompleteReservedOrderAsync(int orderId, string cashierId, CancellationToken cancellationToken = default)
+    {
+        var session = await RequireActiveSessionAsync(cashierId, 0, cancellationToken);
+        await RequireSessionOrderAsync(orderId, cashierId, session, cancellationToken);
+        return await _reservationService.ConsumeReservationAsync(orderId, session.BranchId, cashierId, cancellationToken);
+    }
+
+    public async Task<OrderResultDto> CancelReservedOrderAsync(int orderId, string cashierId, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var session = await RequireActiveSessionAsync(cashierId, 0, cancellationToken);
+        await RequireSessionOrderAsync(orderId, cashierId, session, cancellationToken);
+        return await _reservationService.ReleaseReservationAsync(orderId, session.BranchId, cashierId, reason, cancellationToken);
+    }
+
+    public async Task<OrderResultDto> WasteReservedOrderAsync(int orderId, string userId, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
+        var exists = await _context.Orders.AnyAsync(x => x.Id == orderId && x.BranchId == branchId, cancellationToken);
+        if (!exists)
+        {
+            throw new PosNotFoundException("Order was not found.");
+        }
+
+        return await _reservationService.WasteReservationAsync(orderId, branchId, userId, reason, cancellationToken);
+    }
+
+    public Task<List<Order>> GetPendingReservedOrdersAsync(int sessionId, CancellationToken cancellationToken = default) =>
+        _context.Orders
+            .Include(x => x.Customer)
+            .Include(x => x.Items)
+            .Where(x =>
+                x.UserSessionId == sessionId &&
+                x.OrderStatus == OrderStatus.Pending &&
+                (x.InventoryState == OrderInventoryState.Reserved || x.InventoryState == OrderInventoryState.None))
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+    public async Task<OrderResultDto> CancelAndRestoreOrderAsync(int orderId, string userId, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
+        return await _reservationService.RestoreConsumedOrderAsync(orderId, branchId, userId, reason, cancellationToken);
+    }
+
+    public async Task<OrderResultDto> CancelConsumedAsWasteAsync(int orderId, string userId, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var branchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
+        return await _reservationService.WasteConsumedOrderAsync(orderId, branchId, userId, reason, cancellationToken);
     }
 
     public async Task<Order?> GetReceiptAsync(int orderId, CancellationToken cancellationToken = default)
@@ -373,30 +419,6 @@ public class OrderService : IOrderService
         var requiredIngredients = new Dictionary<StockRequirementKey, RequiredInventoryItem>();
         foreach (var pricedItem in pricedItems)
         {
-            if (pricedItem.Product.DirectInventoryItemId.HasValue)
-            {
-                var directItem = pricedItem.Product.DirectInventoryItem
-                    ?? throw new BusinessException($"Direct sale inventory item is missing for {pricedItem.Product.Name}.");
-                if (directItem.ConsumptionMode != ConsumptionMode.DirectSale || !directItem.IsStockTracked || directItem.IsExpenseOnly)
-                {
-                    throw new BusinessException($"Direct sale inventory item is not configured correctly for {pricedItem.Product.Name}.");
-                }
-
-                var directQuantity = pricedItem.Product.DirectQuantityBase.GetValueOrDefault();
-                if (directQuantity <= 0)
-                {
-                    throw new BusinessException($"Direct sale quantity is missing for {pricedItem.Product.Name}.");
-                }
-
-                AddRequirement(
-                    requiredIngredients,
-                    new StockRequirementKey(directItem.Id, stockRoomLocationId, "stock room"),
-                    directItem.Name,
-                    directItem.BaseUnit,
-                    directQuantity * pricedItem.Quantity);
-                continue;
-            }
-
             var recipe = pricedItem.Product.Recipes.FirstOrDefault(x => x.IsActive);
             if (recipe is null || recipe.Ingredients.Count == 0)
             {
@@ -415,7 +437,7 @@ public class OrderService : IOrderService
                     throw new BusinessException($"Recipe for {pricedItem.Product.Name} has an invalid inventory item.");
                 }
 
-                if (!InventoryControlDefaults.CanUseInRecipe(recipeItem.InventoryItem))
+                if (!recipeItem.InventoryItem.IsStockTracked || recipeItem.InventoryItem.IsExpenseOnly)
                 {
                     continue;
                 }
@@ -534,6 +556,9 @@ public class OrderService : IOrderService
     private static OrderType ParseOrderType(string? value) =>
         Enum.TryParse<OrderType>(value, ignoreCase: true, out var orderType) ? orderType : OrderType.Takeaway;
 
+    private static PaymentStatus ResolveInitialPaymentStatus(OrderType orderType) =>
+        orderType == OrderType.Delivery ? PaymentStatus.CODPending : PaymentStatus.Paid;
+
     private static void ValidateCustomerRules(OrderType orderType, CustomerDto customer, bool allowEmptyCart = false)
     {
         if (!string.IsNullOrWhiteSpace(customer.PhoneNumber) && !IsElevenDigitPhone(customer.PhoneNumber))
@@ -563,6 +588,23 @@ public class OrderService : IOrderService
         var now = DateTime.UtcNow;
         var suffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
         return Task.FromResult($"POS-{now:yyyyMMdd}-B{branchId}-{now:HHmmssfff}-{suffix}");
+    }
+
+    private static string ResolveClientRequestId(CreateOrderDto dto) =>
+        string.IsNullOrWhiteSpace(dto.ClientRequestId) ? dto.IdempotencyKey : dto.ClientRequestId.Trim();
+
+    private async Task RequireSessionOrderAsync(int orderId, string cashierId, UserSession session, CancellationToken cancellationToken)
+    {
+        var exists = await _context.Orders.AnyAsync(x =>
+            x.Id == orderId &&
+            x.CashierId == cashierId &&
+            x.BranchId == session.BranchId &&
+            x.UserSessionId == session.Id, cancellationToken);
+
+        if (!exists)
+        {
+            throw new PosNotFoundException("Order was not found for the active cashier session.");
+        }
     }
 
     private async Task<UserSession> RequireActiveSessionAsync(string userId, int userSessionId, CancellationToken cancellationToken)
@@ -633,7 +675,10 @@ public class OrderService : IOrderService
             OrderNumber = order.OrderNumber,
             Subtotal = order.Subtotal,
             DiscountAmount = order.DiscountAmount,
-            TotalAmount = order.TotalAmount
+            TotalAmount = order.TotalAmount,
+            Status = order.OrderStatus.ToString(),
+            InventoryState = order.InventoryState.ToString(),
+            PaymentStatus = order.PaymentStatus.ToString()
         };
 
     private sealed record PricedOrderItem(Product Product, int Quantity);

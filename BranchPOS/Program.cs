@@ -134,6 +134,7 @@ builder.Services.AddScoped<IStockCountService, StockCountService>();
 builder.Services.AddScoped<IPreparationService, PreparationService>();
 builder.Services.AddScoped<IPurchaseService, PurchaseService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IOrderStockReservationService, OrderStockReservationService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductAvailabilityService, ProductAvailabilityService>();
 builder.Services.AddScoped<IBranchService, BranchService>();

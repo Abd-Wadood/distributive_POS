@@ -22,89 +22,21 @@ public class PreparationRecipesController : Controller
 
     public async Task<IActionResult> Index()
     {
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        var recipes = await _context.PreparationRecipes
-            .Include(x => x.OutputInventoryItem)
-            .Include(x => x.Ingredients)
-            .ThenInclude(x => x.InventoryItem)
-            .Where(x => x.BranchId == branchId)
-            .OrderBy(x => x.Name)
-            .ToListAsync();
-        return View(recipes);
+        await Task.CompletedTask;
+        return RedirectToAction("Index", "InventoryItems");
     }
 
     public async Task<IActionResult> Edit(int? id)
     {
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        PreparationRecipe? recipe = null;
-        if (id.HasValue)
-        {
-            recipe = await _context.PreparationRecipes
-                .Include(x => x.Ingredients)
-                .ThenInclude(x => x.InventoryItem)
-                .FirstOrDefaultAsync(x => x.Id == id.Value && x.BranchId == branchId);
-        }
-
-        recipe ??= new PreparationRecipe { BranchId = branchId, IsActive = true };
-        if (recipe.Ingredients.Count == 0)
-        {
-            recipe.Ingredients.Add(new PreparationRecipeIngredient());
-        }
-
-        await PopulateInventoryItemsAsync(branchId);
-        return View(recipe);
+        await Task.CompletedTask;
+        return RedirectToAction("Index", "InventoryItems");
     }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(PreparationRecipe model)
     {
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        model.Name = (model.Name ?? string.Empty).Trim();
-        model.Ingredients = NormalizeIngredients(model.Ingredients);
-        var inventoryItems = await ValidateRecipeModelAsync(model, branchId);
-
-        if (!ModelState.IsValid)
-        {
-            await PopulateInventoryItemsAsync(branchId);
-            EnsureOneIngredientRow(model);
-            return View(model);
-        }
-
-        var recipe = model.Id > 0
-            ? await _context.PreparationRecipes.Include(x => x.Ingredients).FirstOrDefaultAsync(x => x.Id == model.Id && x.BranchId == branchId)
-            : null;
-
-        if (model.Id > 0 && recipe is null)
-        {
-            return NotFound();
-        }
-
-        recipe ??= new PreparationRecipe { BranchId = branchId };
-        recipe.Name = model.Name;
-        recipe.OutputInventoryItemId = model.OutputInventoryItemId;
-        recipe.OutputQuantityBase = model.OutputQuantityBase;
-        recipe.IsActive = model.IsActive;
-        recipe.UpdatedAt = DateTime.UtcNow;
-        recipe.Ingredients.Clear();
-
-        foreach (var ingredient in model.Ingredients.GroupBy(x => x.InventoryItemId))
-        {
-            recipe.Ingredients.Add(new PreparationRecipeIngredient
-            {
-                InventoryItemId = ingredient.Key,
-                QuantityBase = ingredient.Sum(x => x.QuantityBase),
-                DisplayQuantity = ingredient.Sum(x => x.QuantityBase),
-                DisplayUnit = inventoryItems[ingredient.Key].BaseUnit
-            });
-        }
-
-        if (recipe.Id == 0)
-        {
-            _context.PreparationRecipes.Add(recipe);
-        }
-
-        await _context.SaveChangesAsync();
-        return RedirectToAction(nameof(Index));
+        await Task.CompletedTask;
+        return RedirectToAction("Index", "InventoryItems");
     }
 
     private async Task<Dictionary<int, InventoryItem>> ValidateRecipeModelAsync(PreparationRecipe model, int branchId)

@@ -109,9 +109,9 @@ public class RestaurantInventoryService : IRestaurantInventoryService
                 throw new BusinessException("Kitchen request contains an inventory item outside the active branch.");
             }
 
-            if (detail.InventoryItem is null || !InventoryControlDefaults.CanDispatchToKitchen(detail.InventoryItem))
+            if (detail.InventoryItem is null || !detail.InventoryItem.IsStockTracked || detail.InventoryItem.IsExpenseOnly)
             {
-                throw new BusinessException($"{detail.InventoryItem?.Name ?? "This item"} cannot be dispatched to the kitchen under its consumption mode.");
+                throw new BusinessException($"{detail.InventoryItem?.Name ?? "This item"} cannot be dispatched because it is not stock tracked.");
             }
 
             var fromStock = await LockStockAsync(branchId, detail.InventoryItemId, stockRoom.Id, cancellationToken)
@@ -183,18 +183,22 @@ public class RestaurantInventoryService : IRestaurantInventoryService
         var toUtc = to?.ToUniversalTime();
 
         var orders = _context.Orders.AsNoTracking()
-            .Where(x => x.BranchId == branchId && x.OrderStatus == OrderStatus.Completed);
+            .Where(x => x.BranchId == branchId && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)));
         if (fromUtc.HasValue)
         {
-            orders = orders.Where(x => x.CompletedAt >= fromUtc.Value);
+            orders = orders.Where(x => (x.PaymentReceivedAt ?? x.CompletedAt ?? x.CreatedAt) >= fromUtc.Value);
         }
         if (toUtc.HasValue)
         {
-            orders = orders.Where(x => x.CompletedAt < toUtc.Value);
+            orders = orders.Where(x => (x.PaymentReceivedAt ?? x.CompletedAt ?? x.CreatedAt) < toUtc.Value);
         }
 
         var movements = _context.InventoryMovements.AsNoTracking()
-            .Where(x => x.BranchId == branchId && (x.MovementType == InventoryMovementType.Consumption || x.MovementType == InventoryMovementType.ManualConsumption));
+            .Where(x => x.BranchId == branchId && (
+                x.MovementType == InventoryMovementType.Consumption ||
+                x.MovementType == InventoryMovementType.SaleConsumption ||
+                x.MovementType == InventoryMovementType.ConsumeReservation ||
+                x.MovementType == InventoryMovementType.ManualConsumption));
         var wastageMovements = _context.InventoryMovements.AsNoTracking()
             .Where(x => x.BranchId == branchId && x.MovementType == InventoryMovementType.Wastage);
         if (fromUtc.HasValue)

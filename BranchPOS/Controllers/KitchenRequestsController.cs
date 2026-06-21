@@ -73,7 +73,6 @@ public class KitchenRequestsController : Controller
                 x.IsActive &&
                 x.IsStockTracked &&
                 !x.IsExpenseOnly &&
-                x.AllowKitchenDispatch &&
                 inventoryItemIds.Contains(x.Id));
             if (validCount != inventoryItemIds.Count)
             {
@@ -277,7 +276,7 @@ public class KitchenRequestsController : Controller
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
         return await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly && x.AllowKitchenDispatch)
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly)
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();

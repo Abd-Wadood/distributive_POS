@@ -125,7 +125,7 @@ public class PurchasesController : Controller
             .Select(x => new SelectListItem(x.Name, x.Id.ToString(), x.Id == model.SupplierId))
             .ToListAsync();
         ViewBag.PurchaseInventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == branchId && x.IsActive && (!x.IsPreparedItem || x.IsExpenseOnly))
+            .Where(x => x.BranchId == branchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly)
             .OrderBy(x => x.Name)
             .ToListAsync();
         model.InventoryItems = ((List<InventoryItem>)ViewBag.PurchaseInventoryItems)

@@ -8,5 +8,11 @@ public enum OrderStatus
     Cancelled = 4,
     Refunded = 5,
     UnknownFinalize = 6,
-    ReceiptFailed = 7
+    ReceiptFailed = 7,
+    CancelledAfterPreparation = 8,
+    SentToKitchen = 9,
+    Preparing = 10,
+    Ready = 11,
+    Dispatched = 12,
+    CancelledAsWaste = 13
 }

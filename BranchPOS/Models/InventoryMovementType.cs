@@ -10,5 +10,12 @@ public enum InventoryMovementType
     Production,
     Waste,
     Wastage,
-    Adjustment
+    Adjustment,
+    ReserveForOrder,
+    ReleaseReservation,
+    ConsumeReservation,
+    WasteReservation,
+    SaleConsumption,
+    CancelReturn,
+    WasteFromConsumedOrder
 }

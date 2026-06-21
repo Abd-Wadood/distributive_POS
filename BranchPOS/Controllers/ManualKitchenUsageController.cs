@@ -76,9 +76,7 @@ public class ManualKitchenUsageController : Controller
                 x.BranchId == branchId &&
                 x.IsActive &&
                 x.IsStockTracked &&
-                !x.IsExpenseOnly &&
-                x.AllowManualConsumption &&
-                x.ConsumptionMode == ConsumptionMode.ManualKitchenIssue)
+                !x.IsExpenseOnly)
             .OrderBy(x => x.Name)
             .Select(x => new SelectListItem($"{x.Name} ({x.BaseUnit})", x.Id.ToString()))
             .ToListAsync();

@@ -9,18 +9,17 @@
 </div>
 
 <table class="table table-striped">
-    <thead><tr><th>Name</th><th>Mode</th><th>Base unit</th><th>Purchase unit</th><th>Conversion</th><th>Reorder level</th><th>Type</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Base unit</th><th>Purchase unit</th><th>Conversion</th><th>Reorder level</th><th>Stock tracked</th><th>Status</th><th></th></tr></thead>
     <tbody>
     @foreach (var item in Model)
     {
         <tr>
             <td>@item.Name</td>
-            <td>@item.ConsumptionMode</td>
             <td>@item.BaseUnit</td>
             <td>@item.PurchaseUnitName</td>
             <td>@item.DefaultConversionFactorToBase?.ToString("0.###")</td>
             <td>@item.ReorderLevel</td>
-            <td>@(item.IsPreparedItem ? "Prepared" : "Purchased")</td>
+            <td>@(item.IsStockTracked ? "Yes" : "No")</td>
             <td>@(item.IsActive ? "Active" : "Inactive")</td>
             <td class="text-end">
                 <a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-id="@item.Id">Edit</a>

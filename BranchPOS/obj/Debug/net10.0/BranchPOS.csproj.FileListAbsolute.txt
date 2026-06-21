@@ -317,4 +317,4 @@ C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\artifacts\verify-build\tr\
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\artifacts\verify-build\zh-Hans\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\artifacts\verify-build\zh-Hant\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\artifacts\verify-build\runtimes\win\lib\net9.0\System.Windows.Extensions.dll
-C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\obj\Debug\net10.0\compressed\xdk086umr8-{0}-ch24gevfw5-ch24gevfw5.gz
+C:\Users\wadoo\OneDrive\Desktop\Offline POS\BranchPOS\obj\Debug\net10.0\compressed\xdk086umr8-{0}-9q2293dr9d-9q2293dr9d.gz

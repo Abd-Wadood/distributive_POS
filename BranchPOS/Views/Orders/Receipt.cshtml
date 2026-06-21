@@ -1,55 +1,56 @@
 @model BranchPOS.Models.Order
 @{
     ViewData["Title"] = "Receipt";
+    var shouldAutoPrint = Context.Request.Query["print"] == "1";
+    var receiptTime = (Model.CompletedAt ?? Model.CreatedAt).ToLocalTime().ToString("g");
 }
 
-<div class="receipt mx-auto">
-    <div class="text-center mb-3">
+<div class="receipt receipt-slip mx-auto">
+    <div class="receipt-header">
         <h2>BranchPOS</h2>
-        <div>Order @Model.OrderNumber</div>
-        <div>@(Model.CompletedAt ?? Model.CreatedAt).ToLocalTime()</div>
+        <div>@Model.OrderNumber</div>
+        <div>@receiptTime</div>
     </div>
 
-    <dl class="row small">
-        <dt class="col-4">Cashier</dt>
-        <dd class="col-8">@Model.Cashier?.Email</dd>
-        <dt class="col-4">Type</dt>
-        <dd class="col-8">@Model.OrderType</dd>
+    <div class="receipt-meta">
+        <div><span>Cashier</span><strong>@Model.Cashier?.Email</strong></div>
+        <div><span>Type</span><strong>@Model.OrderType</strong></div>
         @if (Model.Customer is not null)
         {
-            <dt class="col-4">Customer</dt>
-            <dd class="col-8">@Model.Customer.Name</dd>
-            <dt class="col-4">Phone</dt>
-            <dd class="col-8">@Model.Customer.PhoneNumber</dd>
-            <dt class="col-4">Address</dt>
-            <dd class="col-8">@Model.Customer.Address</dd>
+            <div><span>Customer</span><strong>@Model.Customer.Name</strong></div>
+            <div><span>Phone</span><strong>@Model.Customer.PhoneNumber</strong></div>
+            <div><span>Address</span><strong>@Model.Customer.Address</strong></div>
         }
-    </dl>
+    </div>
 
-    <table class="table table-sm">
-        <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Total</th></tr></thead>
-        <tbody>
+    <div class="receipt-items">
+        <div class="receipt-item receipt-item-head">
+            <span>Item</span>
+            <span>Qty</span>
+            <span>Total</span>
+        </div>
         @foreach (var item in Model.Items)
         {
-            <tr>
-                <td>
+            <div class="receipt-item">
+                <span>
                     @item.ProductNameSnapshot
-                    <div class="text-muted small">@CurrencyFormatter.Format(item.UnitPrice) each</div>
-                </td>
-                <td class="text-end">@item.Quantity</td>
-                <td class="text-end">@CurrencyFormatter.Format(item.LineTotal)</td>
-            </tr>
+                    <small>@CurrencyFormatter.Format(item.UnitPrice) each</small>
+                </span>
+                <span>@item.Quantity</span>
+                <span>@CurrencyFormatter.Format(item.LineTotal)</span>
+            </div>
         }
-        </tbody>
-    </table>
+    </div>
 
-    <div class="d-flex justify-content-between"><span>Subtotal</span><strong>@CurrencyFormatter.Format(Model.Subtotal)</strong></div>
-    <div class="d-flex justify-content-between"><span>Discount</span><strong>@CurrencyFormatter.Format(Model.DiscountAmount)</strong></div>
-    <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><span>Total</span><strong>@CurrencyFormatter.Format(Model.TotalAmount)</strong></div>
+    <div class="receipt-totals">
+        <div><span>Subtotal</span><strong>@CurrencyFormatter.Format(Model.Subtotal)</strong></div>
+        <div><span>Discount</span><strong>@CurrencyFormatter.Format(Model.DiscountAmount)</strong></div>
+        <div class="receipt-grand-total"><span>Total</span><strong>@CurrencyFormatter.Format(Model.TotalAmount)</strong></div>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.Notes))
     {
-        <p class="small mt-3">@Model.Notes</p>
+        <p class="receipt-notes">@Model.Notes</p>
     }
 
     <div class="d-print-none mt-3 d-flex gap-2">
@@ -58,3 +59,12 @@
         <a class="btn btn-outline-secondary" asp-action="Index">Orders</a>
     </div>
 </div>
+
+@if (shouldAutoPrint)
+{
+    <script>
+        window.addEventListener('load', () => {
+            window.setTimeout(() => window.print(), 250);
+        });
+    </script>
+}

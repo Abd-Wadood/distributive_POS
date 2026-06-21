@@ -55,7 +55,7 @@ public class InventoryTransactionService : IInventoryTransactionService
         }
 
         var stock = await LockStockAsync(branchId, inventoryItemId, locationId, cancellationToken);
-        var available = stock?.QuantityBase ?? 0m;
+        var available = stock is null ? 0m : stock.QuantityBase - stock.ReservedQuantityBase;
         if (stock is null || available < quantityBase)
         {
             throw new BusinessException(
@@ -69,7 +69,7 @@ public class InventoryTransactionService : IInventoryTransactionService
             WHERE "BranchId" = {branchId}
               AND "InventoryItemId" = {inventoryItemId}
               AND "InventoryLocationId" = {locationId}
-              AND "QuantityBase" >= {quantityBase}
+              AND ("QuantityBase" - "ReservedQuantityBase") >= {quantityBase}
             """, cancellationToken);
 
         if (affected != 1)
@@ -77,7 +77,7 @@ public class InventoryTransactionService : IInventoryTransactionService
             var current = await _context.InventoryStocks
                 .AsNoTracking()
                 .Where(x => x.BranchId == branchId && x.InventoryItemId == inventoryItemId && x.InventoryLocationId == locationId)
-                .Select(x => (decimal?)x.QuantityBase)
+                .Select(x => (decimal?)(x.QuantityBase - x.ReservedQuantityBase))
                 .SingleOrDefaultAsync(cancellationToken) ?? 0m;
             throw new BusinessException(
                 $"Not enough {locationName} quantity for {shortageItemName}. Required: {quantityBase:0.###} {shortageUnit}, Available: {current:0.###} {shortageUnit}.");

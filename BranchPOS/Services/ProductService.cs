@@ -45,12 +45,9 @@ public class ProductService : IProductService
     public async Task CreateProductAsync(Product product, Dictionary<int, decimal> recipeItemQuantities, CancellationToken cancellationToken = default)
     {
         product.BranchId = await _branchContextService.GetCurrentBranchIdAsync(cancellationToken);
+        product.DirectInventoryItemId = null;
+        product.DirectQuantityBase = null;
         var normalized = NormalizeRecipeQuantities(recipeItemQuantities);
-        if (product.DirectInventoryItemId.HasValue && normalized.Count > 0)
-        {
-            throw new InvalidOperationException("Direct sale products cannot also use recipe ingredients.");
-        }
-        await ValidateDirectSaleMappingAsync(product, cancellationToken);
         var inventoryItems = await LoadValidInventoryItemsAsync(product.BranchId, normalized.Keys, cancellationToken);
         ValidateRecipeInventoryItems(inventoryItems.Values);
         if (normalized.Count > 0)
@@ -91,14 +88,9 @@ public class ProductService : IProductService
         existing.Name = product.Name;
         existing.Price = product.Price;
         existing.CategoryId = product.CategoryId;
-        existing.DirectInventoryItemId = product.DirectInventoryItemId;
-        existing.DirectQuantityBase = product.DirectInventoryItemId.HasValue ? product.DirectQuantityBase : null;
+        existing.DirectInventoryItemId = null;
+        existing.DirectQuantityBase = null;
         var normalized = NormalizeRecipeQuantities(recipeItemQuantities);
-        if (existing.DirectInventoryItemId.HasValue && normalized.Count > 0)
-        {
-            throw new InvalidOperationException("Direct sale products cannot also use recipe ingredients.");
-        }
-        await ValidateDirectSaleMappingAsync(existing, cancellationToken);
         var inventoryItems = await LoadValidInventoryItemsAsync(branchId, normalized.Keys, cancellationToken);
         ValidateRecipeInventoryItems(inventoryItems.Values);
 
@@ -139,36 +131,13 @@ public class ProductService : IProductService
         return recipeItemQuantities;
     }
 
-    private async Task ValidateDirectSaleMappingAsync(Product product, CancellationToken cancellationToken)
-    {
-        if (!product.DirectInventoryItemId.HasValue)
-        {
-            product.DirectQuantityBase = null;
-            return;
-        }
-
-        if (!product.DirectQuantityBase.HasValue || product.DirectQuantityBase <= 0)
-        {
-            throw new InvalidOperationException("Direct sale quantity must be greater than zero.");
-        }
-
-        var item = await _context.InventoryItems
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == product.DirectInventoryItemId && x.BranchId == product.BranchId && x.IsActive, cancellationToken)
-            ?? throw new InvalidOperationException("Direct sale inventory item must be active and belong to the active branch.");
-        if (item.ConsumptionMode != ConsumptionMode.DirectSale || !item.IsStockTracked || item.IsExpenseOnly)
-        {
-            throw new InvalidOperationException("Direct sale inventory item must use DirectSale consumption mode.");
-        }
-    }
-
     private static void ValidateRecipeInventoryItems(IEnumerable<InventoryItem> items)
     {
         foreach (var item in items)
         {
-            if (!InventoryControlDefaults.CanUseInRecipe(item))
+            if (!item.IsStockTracked || item.IsExpenseOnly)
             {
-                throw new InvalidOperationException($"{item.Name} cannot be used as a recipe ingredient under its consumption mode.");
+                throw new InvalidOperationException($"{item.Name} cannot be used as a product inventory item because it is not stock tracked.");
             }
         }
     }

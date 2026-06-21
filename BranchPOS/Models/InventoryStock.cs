@@ -20,7 +20,12 @@ public class InventoryStock
 
     public decimal QuantityBase { get; set; }
 
+    public decimal ReservedQuantityBase { get; set; }
+
     public decimal AverageUnitCostBase { get; set; }
+
+    [NotMapped]
+    public decimal AvailableQuantityBase => QuantityBase - ReservedQuantityBase;
 
     [NotMapped]
     public decimal Quantity

@@ -75,20 +75,20 @@ public class AdminDashboardService : IAdminDashboardService
 
         var todayOrderGroups = await _context.Orders
             .AsNoTracking()
-            .Where(x => x.CompletedAt >= today && x.CompletedAt < tomorrow)
+            .Where(x => x.CreatedAt >= today && x.CreatedAt < tomorrow)
             .GroupBy(x => x.BranchId)
             .Select(x => new TodayOrderGroupRow
             {
                 BranchId = x.Key,
-                Completed = x.Count(o => o.OrderStatus == OrderStatus.Completed),
+                Completed = x.Count(o => o.PaymentStatus == PaymentStatus.Paid || (o.PaymentStatus == PaymentStatus.Unpaid && o.OrderStatus == OrderStatus.Completed)),
                 Cancelled = x.Count(o => o.OrderStatus == OrderStatus.Cancelled),
-                Sales = x.Where(o => o.OrderStatus == OrderStatus.Completed).Sum(o => o.TotalAmount)
+                Sales = x.Where(o => o.PaymentStatus == PaymentStatus.Paid || (o.PaymentStatus == PaymentStatus.Unpaid && o.OrderStatus == OrderStatus.Completed)).Sum(o => o.TotalAmount)
             })
             .ToListAsync(cancellationToken);
 
         var lowStockGroups = await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.QuantityBase <= x.InventoryItem!.ReorderLevel)
+            .Where(x => x.QuantityBase - x.ReservedQuantityBase <= x.InventoryItem!.ReorderLevel)
             .GroupBy(x => x.BranchId)
             .Select(x => new CountByBranchRow { BranchId = x.Key, Count = x.Count() })
             .ToListAsync(cancellationToken);
@@ -137,7 +137,7 @@ public class AdminDashboardService : IAdminDashboardService
                 new() { Title = "Active branches", Value = activeBranches.ToString(), Hint = $"{branchRows.Count} total branches", Badge = "Info" },
                 new() { Title = "Active sessions", Value = activeSessions.ToString(), Hint = $"{abandonedSessions} abandoned", Badge = abandonedSessions == 0 ? "Healthy" : "Warning" },
                 new() { Title = "Today's orders", Value = todayCompletedOrders.ToString(), Hint = $"{todayCancelledOrders} cancelled", Badge = "Info" },
-                new() { Title = "Today's sales", Value = todaySales.ToString("C"), Hint = "Completed orders only", Badge = "Healthy" },
+                new() { Title = "Today's sales", Value = todaySales.ToString("C"), Hint = "Paid orders only", Badge = "Healthy" },
                 new() { Title = "Low stock items", Value = lowStockCount.ToString(), Hint = "At or below minimum", Badge = lowStockCount == 0 ? "Healthy" : "Critical" },
                 new() { Title = "Users", Value = activeUsers.ToString(), Hint = $"{inactiveUsers} inactive", Badge = inactiveUsers == 0 ? "Healthy" : "Info" }
             }
@@ -262,7 +262,7 @@ public class AdminDashboardService : IAdminDashboardService
                     .Where(h => h.UserSessionId == x.Id)
                     .Select(h => (DateTime?)h.LastSeenAt)
                     .FirstOrDefault(),
-                CompletedOrdersCount = _context.Orders.Count(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed),
+                CompletedOrdersCount = _context.Orders.Count(o => o.UserSessionId == x.Id && (o.PaymentStatus == PaymentStatus.Paid || (o.PaymentStatus == PaymentStatus.Unpaid && o.OrderStatus == OrderStatus.Completed))),
                 DraftOrdersCount = _context.Orders.Count(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Draft)
             })
             .ToListAsync(cancellationToken);
@@ -274,7 +274,7 @@ public class AdminDashboardService : IAdminDashboardService
     {
         var salesByBranch = await _context.Orders
             .AsNoTracking()
-            .Where(x => x.OrderStatus == OrderStatus.Completed && x.CompletedAt >= today && x.CompletedAt < tomorrow)
+            .Where(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)))
             .GroupBy(x => new { x.BranchId, x.Branch!.Name })
             .Select(x => new SalesByBranchViewModel
             {
@@ -288,8 +288,8 @@ public class AdminDashboardService : IAdminDashboardService
 
         var hourly = await _context.Orders
             .AsNoTracking()
-            .Where(x => x.OrderStatus == OrderStatus.Completed && x.CompletedAt >= today && x.CompletedAt < tomorrow)
-            .GroupBy(x => x.CompletedAt!.Value.Hour)
+            .Where(x => x.CreatedAt >= today && x.CreatedAt < tomorrow && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)))
+            .GroupBy(x => x.CreatedAt.Hour)
             .Select(x => new HourlySalesViewModel
             {
                 Hour = x.Key,
@@ -320,17 +320,17 @@ public class AdminDashboardService : IAdminDashboardService
     {
         return await _context.InventoryStocks
             .AsNoTracking()
-            .Where(x => x.QuantityBase <= x.InventoryItem!.ReorderLevel)
-            .OrderBy(x => x.InventoryItem!.ReorderLevel == 0 ? 0 : x.QuantityBase / x.InventoryItem.ReorderLevel)
-            .ThenBy(x => x.QuantityBase)
+            .Where(x => x.QuantityBase - x.ReservedQuantityBase <= x.InventoryItem!.ReorderLevel)
+            .OrderBy(x => x.InventoryItem!.ReorderLevel == 0 ? 0 : (x.QuantityBase - x.ReservedQuantityBase) / x.InventoryItem.ReorderLevel)
+            .ThenBy(x => x.QuantityBase - x.ReservedQuantityBase)
             .Select(x => new InventoryRiskViewModel
             {
                 BranchName = x.Branch == null ? "" : x.Branch.Name,
                 IngredientName = x.InventoryItem == null ? "" : $"{x.InventoryItem.Name} ({x.InventoryLocation!.Name})",
                 UnitType = x.InventoryItem == null ? "" : x.InventoryItem.BaseUnit,
-                CurrentQuantity = x.QuantityBase,
+                CurrentQuantity = x.QuantityBase - x.ReservedQuantityBase,
                 MinimumStockLevel = x.InventoryItem == null ? 0 : x.InventoryItem.ReorderLevel,
-                Severity = x.QuantityBase <= 0 ? "Critical" : "Warning"
+                Severity = x.QuantityBase - x.ReservedQuantityBase <= 0 ? "Critical" : "Warning"
             })
             .Take(_options.MaxInventoryRisks)
             .ToListAsync(cancellationToken);

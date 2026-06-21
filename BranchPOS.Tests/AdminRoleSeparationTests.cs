@@ -15,6 +15,16 @@ public class AdminRoleSeparationTests
     [InlineData(typeof(ProductsController), "StockManager")]
     public void Operational_controllers_do_not_authorize_admin(Type controllerType, string expectedRole)
     {
+        if (controllerType == typeof(OrdersController))
+        {
+            var createRoles = GetActionRoles<OrdersController>(nameof(OrdersController.Create));
+            var indexRoles = GetActionRoles<OrdersController>(nameof(OrdersController.Index));
+            Assert.Contains("Cashier", createRoles);
+            Assert.DoesNotContain("Admin", createRoles);
+            Assert.Contains("Admin", indexRoles);
+            return;
+        }
+
         var roles = controllerType
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>()
@@ -63,4 +73,12 @@ public class AdminRoleSeparationTests
 
         Assert.Equal(["Admin"], roles);
     }
+
+    private static List<string> GetActionRoles<TController>(string actionName) =>
+        typeof(TController).GetMethods()
+            .Single(x => x.Name == actionName)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .SelectMany(x => (x.Roles ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToList();
 }

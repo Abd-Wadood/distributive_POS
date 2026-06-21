@@ -5,7 +5,6 @@
 @{
     var baseUnits = (IEnumerable<string>?)ViewBag.BaseUnits ?? InventoryUnitCatalog.SupportedBaseUnits;
     var unitOptions = (IEnumerable<InventoryUnitOption>?)ViewBag.UnitOptions ?? InventoryUnitCatalog.GetOptions();
-    var consumptionModes = (IEnumerable<ConsumptionMode>?)ViewBag.ConsumptionModes ?? Enum.GetValues<ConsumptionMode>();
 }
 
 <form method="post">
@@ -16,16 +15,6 @@
             <label asp-for="Name" class="form-label"></label>
             <input asp-for="Name" class="form-control" />
             <span asp-validation-for="Name" class="text-danger"></span>
-        </div>
-        <div class="col-md-3">
-            <label asp-for="ConsumptionMode" class="form-label">Consumption mode</label>
-            <select asp-for="ConsumptionMode" class="form-select" id="consumptionModeSelect">
-                @foreach (var mode in consumptionModes)
-                {
-                    <option value="@mode">@mode</option>
-                }
-            </select>
-            <span asp-validation-for="ConsumptionMode" class="text-danger"></span>
         </div>
         <div class="col-md-2">
             <label asp-for="BaseUnit" class="form-label">Base unit</label>
@@ -50,20 +39,16 @@
             <div class="form-text" id="conversionHelp"></div>
             <span asp-validation-for="DefaultConversionFactorToBase" class="text-danger"></span>
         </div>
-        <div class="col-md-2 stock-control-field">
+        <div class="col-md-2">
             <label asp-for="ReorderLevel" class="form-label">Reorder level (base)</label>
             <input asp-for="ReorderLevel" class="form-control" type="number" step="0.001" />
             <span asp-validation-for="ReorderLevel" class="text-danger"></span>
         </div>
-        <div class="col-md-2 stock-control-field">
-            <label asp-for="MinimumKitchenLevel" class="form-label">Minimum kitchen level</label>
-            <input asp-for="MinimumKitchenLevel" class="form-control" type="number" step="0.001" />
-            <span asp-validation-for="MinimumKitchenLevel" class="text-danger"></span>
-        </div>
-        <div class="col-md-2 stock-control-field">
-            <label asp-for="MaximumKitchenLevel" class="form-label">Maximum kitchen level</label>
-            <input asp-for="MaximumKitchenLevel" class="form-control" type="number" step="0.001" />
-            <span asp-validation-for="MaximumKitchenLevel" class="text-danger"></span>
+        <div class="col-md-2 d-flex align-items-end">
+            <div class="form-check mb-2">
+                <input asp-for="IsStockTracked" class="form-check-input" />
+                <label asp-for="IsStockTracked" class="form-check-label">Stock tracked</label>
+            </div>
         </div>
         <div class="col-md-1 d-flex align-items-end">
             <div class="form-check mb-2">
@@ -71,14 +56,7 @@
                 <label asp-for="IsActive" class="form-check-label">Active</label>
             </div>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
-            <div class="form-check mb-2">
-                <input asp-for="IsPreparedItem" class="form-check-input" id="preparedItemCheck" />
-                <label asp-for="IsPreparedItem" class="form-check-label">Prepared item</label>
-            </div>
-        </div>
     </div>
-    <div class="form-text mt-2" id="preparedItemHelp"></div>
     <div class="mt-3">
         <button class="btn btn-primary" type="submit">Save</button>
         <a class="btn btn-secondary" asp-action="Index">Cancel</a>
@@ -99,42 +77,7 @@
         const purchaseUnit = document.getElementById('purchaseUnitSelect');
         const conversion = document.getElementById('conversionInput');
         const help = document.getElementById('conversionHelp');
-        const preparedItem = document.getElementById('preparedItemCheck');
-        const preparedHelp = document.getElementById('preparedItemHelp');
-        const consumptionMode = document.getElementById('consumptionModeSelect');
-        const stockControlFields = document.querySelectorAll('.stock-control-field');
         const initialPurchaseUnit = '@(Model.PurchaseUnitName ?? string.Empty)';
-
-        const syncModeDefaults = () => {
-            const isExpenseOnly = consumptionMode?.value === 'ExpenseOnly';
-            stockControlFields.forEach(x => x.classList.toggle('d-none', isExpenseOnly));
-            if (isExpenseOnly) {
-                baseUnit.value = 'None';
-                purchaseUnit.innerHTML = '<option value="">Select unit</option>';
-                purchaseUnit.value = '';
-                conversion.value = '';
-                conversion.readOnly = true;
-                help.textContent = 'Expense-only items record cost without stock balances.';
-                return;
-            }
-
-            conversion.readOnly = false;
-            if (baseUnit.value === 'None') {
-                baseUnit.value = 'Piece';
-            }
-            syncPurchaseUnits(purchaseUnit.value);
-        };
-
-        const syncPreparedHelp = () => {
-            if (!preparedItem?.checked) {
-                preparedHelp.textContent = '';
-                return;
-            }
-
-            const baseMessage = 'Prepared items are produced internally through Preparation Batches. They are not normally purchased from suppliers.';
-            const pieceMessage = ' Use Piece for portioned items like dough balls, patties, or prepared boxes.';
-            preparedHelp.textContent = baseUnit.value === 'Piece' ? `${baseMessage}${pieceMessage}` : baseMessage;
-        };
 
         const syncPurchaseUnits = (preferredValue) => {
             const compatible = unitOptions.filter(x => x.CompatibleBaseUnit === baseUnit.value);
@@ -152,12 +95,7 @@
             if (!stillValid) {
                 conversion.value = '';
             }
-            if (!purchaseUnit.value && preparedItem?.checked && baseUnit.value === 'Piece') {
-                purchaseUnit.value = 'Piece';
-                conversion.value = '1';
-            }
             syncConversion();
-            syncPreparedHelp();
         };
 
         const syncConversion = () => {
@@ -182,11 +120,8 @@
         };
 
         baseUnit?.addEventListener('change', () => syncPurchaseUnits(null));
-        consumptionMode?.addEventListener('change', syncModeDefaults);
-        preparedItem?.addEventListener('change', () => syncPurchaseUnits(purchaseUnit.value));
         purchaseUnit?.addEventListener('change', syncConversion);
         conversion?.addEventListener('input', syncConversion);
         syncPurchaseUnits(initialPurchaseUnit);
-        syncModeDefaults();
     })();
 </script>

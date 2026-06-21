@@ -47,8 +47,7 @@
                                     selected="@(Model.Items[i].InventoryItemId == item.Id)"
                                     data-base-unit="@item.BaseUnit"
                                     data-purchase-unit="@item.PurchaseUnitName"
-                                    data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")"
-                                    data-expense-only="@item.IsExpenseOnly.ToString().ToLowerInvariant()">
+                                    data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")">
                                 @item.Name (@item.BaseUnit)
                             </option>
                         }
@@ -94,8 +93,7 @@
                     <option value="@item.Id"
                             data-base-unit="@item.BaseUnit"
                             data-purchase-unit="@item.PurchaseUnitName"
-                            data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")"
-                            data-expense-only="@item.IsExpenseOnly.ToString().ToLowerInvariant()">
+                            data-conversion="@item.DefaultConversionFactorToBase?.ToString("0.###")">
                         @item.Name (@item.BaseUnit)
                     </option>
                 }
@@ -132,7 +130,6 @@
                 const option = selectedItem(row);
                 const baseUnit = option?.dataset.baseUnit || '';
                 const purchaseUnit = option?.dataset.purchaseUnit || '';
-                const expenseOnly = option?.dataset.expenseOnly === 'true';
                 const conversionValue = row.querySelector('.conversion-display');
                 const purchaseUnitDisplay = row.querySelector('.purchase-unit-display');
                 const conversion = Number(conversionValue?.value || option?.dataset.conversion);
@@ -146,27 +143,25 @@
                 if (!option?.value) {
                     itemHelper.textContent = '';
                     purchaseUnitDisplay.value = '';
-                    conversionDisplay.value = '';
+                    conversionValue.value = '';
                     conversionHelper.textContent = '';
                     baseQuantityOutput.textContent = '';
                     totalCostOutput.value = '';
                     return;
                 }
 
-                itemHelper.textContent = expenseOnly ? 'Expense only: cost is recorded without stock quantity.' : `Base unit: ${baseUnit}`;
+                itemHelper.textContent = `Base unit: ${baseUnit}`;
                 if (!purchaseUnitDisplay.value) {
                     purchaseUnitDisplay.value = purchaseUnit;
                 }
                 if (!conversionValue.value && Number.isFinite(conversion) && conversion > 0) {
                     conversionValue.value = formatDecimal(conversion);
                 }
-                conversionValue.disabled = expenseOnly;
+                conversionValue.disabled = false;
                 purchaseUnitDisplay.disabled = false;
-                conversionHelper.textContent = expenseOnly
-                    ? 'No stock conversion is needed.'
-                    : Number.isFinite(conversion) ? `1 ${purchaseUnitDisplay.value || purchaseUnit} = ${formatDecimal(conversion)} ${baseUnit}` : '';
+                conversionHelper.textContent = Number.isFinite(conversion) ? `1 ${purchaseUnitDisplay.value || purchaseUnit} = ${formatDecimal(conversion)} ${baseUnit}` : '';
 
-                const baseQuantity = !expenseOnly && quantity > 0 && conversion > 0 ? quantity * conversion : NaN;
+                const baseQuantity = quantity > 0 && conversion > 0 ? quantity * conversion : NaN;
                 const totalCost = quantity > 0 && unitCost > 0 ? quantity * unitCost : NaN;
                 baseQuantityOutput.textContent = Number.isFinite(baseQuantity) ? `${formatDecimal(baseQuantity)} ${baseUnit}` : '';
                 if (!totalCostOutput.value || document.activeElement !== totalCostOutput) {

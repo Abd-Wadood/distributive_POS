@@ -1,6 +1,7 @@
 using BranchPOS.Data;
 using BranchPOS.Models;
 using BranchPOS.Services;
+using BranchPOS.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,13 +26,11 @@ public class InventoryReportsController : Controller
 
     public async Task<IActionResult> StockRoom()
     {
-        await PopulatePreparedRecipeOutputQuantitiesAsync();
         return View("Stock", await _restaurantInventoryService.GetStockAsync("Stock Room"));
     }
 
     public async Task<IActionResult> Kitchen()
     {
-        await PopulatePreparedRecipeOutputQuantitiesAsync();
         return View("Stock", await _restaurantInventoryService.GetStockAsync("Kitchen"));
     }
 
@@ -41,7 +40,7 @@ public class InventoryReportsController : Controller
         var stocks = await _context.InventoryStocks
             .Include(x => x.InventoryItem)
             .Include(x => x.InventoryLocation)
-            .Where(x => x.BranchId == branchId && x.QuantityBase <= x.InventoryItem!.ReorderLevel)
+            .Where(x => x.BranchId == branchId && x.QuantityBase - x.ReservedQuantityBase <= x.InventoryItem!.ReorderLevel)
             .OrderBy(x => x.InventoryLocation!.Name)
             .ThenBy(x => x.InventoryItem!.Name)
             .ToListAsync();
@@ -69,14 +68,8 @@ public class InventoryReportsController : Controller
 
     public async Task<IActionResult> ControlModes()
     {
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        var items = await _context.InventoryItems
-            .AsNoTracking()
-            .Where(x => x.BranchId == branchId)
-            .OrderBy(x => x.ConsumptionMode)
-            .ThenBy(x => x.Name)
-            .ToListAsync();
-        return View(items);
+        await Task.CompletedTask;
+        return RedirectToAction(nameof(Index));
     }
 
     public async Task<IActionResult> ManualUsage()
@@ -110,16 +103,8 @@ public class InventoryReportsController : Controller
 
     public async Task<IActionResult> ExpenseOnlyPurchases()
     {
-        var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        var lines = await _context.PurchaseItems
-            .AsNoTracking()
-            .Include(x => x.Purchase)
-            .Include(x => x.InventoryItem)
-            .Where(x => x.BranchId == branchId && x.IsExpenseOnly)
-            .OrderByDescending(x => x.CreatedAt)
-            .Take(500)
-            .ToListAsync();
-        return View(lines);
+        await Task.CompletedTask;
+        return RedirectToAction(nameof(Index));
     }
 
     public async Task<IActionResult> RecipeConsumption()
@@ -131,7 +116,7 @@ public class InventoryReportsController : Controller
             .Include(x => x.FromLocation)
             .Where(x =>
                 x.BranchId == branchId &&
-                x.MovementType == InventoryMovementType.Consumption &&
+                x.MovementType == InventoryMovementType.ConsumeReservation &&
                 x.ReferenceType == nameof(Order))
             .OrderByDescending(x => x.CreatedAt)
             .Take(500)
@@ -139,13 +124,58 @@ public class InventoryReportsController : Controller
         return View(movements);
     }
 
-    private async Task PopulatePreparedRecipeOutputQuantitiesAsync()
+    public async Task<IActionResult> Reservations()
     {
         var branchId = await _branchContextService.GetCurrentBranchIdAsync();
-        ViewBag.PreparedRecipeOutputQuantities = await _context.PreparationRecipes
+        var activeReservationTotals = await _context.OrderInventoryReservations
             .AsNoTracking()
-            .Where(x => x.BranchId == branchId && x.IsActive && x.OutputQuantityBase > 0)
-            .GroupBy(x => x.OutputInventoryItemId)
-            .ToDictionaryAsync(x => x.Key, x => x.First().OutputQuantityBase);
+            .Where(x => x.BranchId == branchId && x.Status == OrderInventoryReservationStatus.Active)
+            .GroupBy(x => x.InventoryStockId)
+            .Select(x => new { InventoryStockId = x.Key, Quantity = x.Sum(y => y.RequiredQuantityBase) })
+            .ToDictionaryAsync(x => x.InventoryStockId, x => x.Quantity);
+
+        var stockIds = activeReservationTotals.Keys.ToList();
+        var stocks = await _context.InventoryStocks
+            .AsNoTracking()
+            .Include(x => x.InventoryItem)
+            .Include(x => x.InventoryLocation)
+            .Where(x => x.BranchId == branchId && (x.ReservedQuantityBase > 0 || stockIds.Contains(x.Id)))
+            .OrderBy(x => x.InventoryLocation!.Name)
+            .ThenBy(x => x.InventoryItem!.Name)
+            .ToListAsync();
+
+        var overdueCutoff = DateTime.UtcNow.AddHours(-2);
+        var overdueOrders = await _context.Orders
+            .AsNoTracking()
+            .Include(x => x.Cashier)
+            .Where(x =>
+                x.BranchId == branchId &&
+                x.OrderStatus == OrderStatus.Pending &&
+                x.InventoryState == OrderInventoryState.Reserved &&
+                x.CreatedAt < overdueCutoff)
+            .OrderBy(x => x.CreatedAt)
+            .Take(200)
+            .Select(x => new OverdueReservedOrderViewModel
+            {
+                OrderId = x.Id,
+                OrderNumber = x.OrderNumber,
+                CreatedAt = x.CreatedAt,
+                TotalAmount = x.TotalAmount,
+                CashierName = x.Cashier == null ? x.CashierId : x.Cashier.Email ?? x.Cashier.UserName ?? x.CashierId
+            })
+            .ToListAsync();
+
+        return View(new ReservationAuditViewModel
+        {
+            Rows = stocks.Select(x => new ReservationAuditRowViewModel
+            {
+                ItemName = x.InventoryItem?.Name ?? "",
+                LocationName = x.InventoryLocation?.Name ?? "",
+                StockReservedQuantity = x.ReservedQuantityBase,
+                ActiveReservationQuantity = activeReservationTotals.GetValueOrDefault(x.Id)
+            }).ToList(),
+            OverdueOrders = overdueOrders
+        });
     }
+
 }

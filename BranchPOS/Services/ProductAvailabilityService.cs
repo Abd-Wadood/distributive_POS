@@ -115,9 +115,7 @@ public class ProductAvailabilityService : IProductAvailabilityService
                 x.CategoryId,
                 x.Category == null ? "" : x.Category.Name,
                 x.IsActive,
-                null,
-                x.DirectInventoryItemId,
-                x.DirectQuantityBase))
+                null))
             .ToListAsync(cancellationToken);
 
         var productIds = products.Select(x => x.Id).ToList();
@@ -129,9 +127,7 @@ public class ProductAvailabilityService : IProductAvailabilityService
                 productIds.Contains(x.Recipe.ProductId) &&
                 x.InventoryItem != null &&
                 x.InventoryItem.IsStockTracked &&
-                !x.InventoryItem.IsExpenseOnly &&
-                x.InventoryItem.AllowRecipeConsumption &&
-                x.InventoryItem.ConsumptionMode == ConsumptionMode.RecipeConsumption)
+                !x.InventoryItem.IsExpenseOnly)
             .Select(x => new
             {
                 x.Recipe!.ProductId,
@@ -149,29 +145,10 @@ public class ProductAvailabilityService : IProductAvailabilityService
             .Select(x => new PosCategoryMenuItem(x.Id, x.Name))
             .ToListAsync(cancellationToken);
 
-        var directItemIds = products
-            .Where(x => x.DirectInventoryItemId.HasValue && x.DirectQuantityBase.GetValueOrDefault() > 0)
-            .Select(x => x.DirectInventoryItemId!.Value)
-            .Distinct()
-            .ToList();
-        var validDirectItems = directItemIds.Count == 0
-            ? []
-            : await _context.InventoryItems
-                .AsNoTracking()
-                .Where(x =>
-                    x.BranchId == branchId &&
-                    x.IsActive &&
-                    x.IsStockTracked &&
-                    !x.IsExpenseOnly &&
-                    x.ConsumptionMode == ConsumptionMode.DirectSale &&
-                    directItemIds.Contains(x.Id))
-                .Select(x => x.Id)
-                .ToListAsync(cancellationToken);
-
         var menu = new PosMenuCacheItem(
             products.Select(x => x with
             {
-                Requirements = BuildProductRequirements(x, requirementsByProduct, validDirectItems)
+                Requirements = BuildProductRequirements(x, requirementsByProduct)
             }).ToList(),
             categories);
 
@@ -185,16 +162,8 @@ public class ProductAvailabilityService : IProductAvailabilityService
 
     private static List<InventoryRequirement> BuildProductRequirements(
         PosProductMenuItem product,
-        Dictionary<int, List<InventoryRequirement>> requirementsByProduct,
-        List<int> validDirectItemIds)
+        Dictionary<int, List<InventoryRequirement>> requirementsByProduct)
     {
-        if (product.DirectInventoryItemId.HasValue &&
-            product.DirectQuantityBase.GetValueOrDefault() > 0 &&
-            validDirectItemIds.Contains(product.DirectInventoryItemId.Value))
-        {
-            return [new InventoryRequirement(product.DirectInventoryItemId.Value, product.DirectQuantityBase!.Value, "Stock Room")];
-        }
-
         return requirementsByProduct.TryGetValue(product.Id, out var productRequirements)
             ? productRequirements
             : [];
@@ -203,7 +172,6 @@ public class ProductAvailabilityService : IProductAvailabilityService
     private async Task<Dictionary<InventoryLocationKey, decimal>> GetCurrentInventoryAsync(int branchId, PosMenuCacheItem menu, CancellationToken cancellationToken)
     {
         var kitchenLocationId = await GetKitchenLocationIdAsync(branchId, cancellationToken);
-        var stockRoomLocationId = await GetStockRoomLocationIdAsync(branchId, cancellationToken);
         var inventoryItemIds = menu.Products
             .SelectMany(x => x.Requirements)
             .Select(x => x.InventoryItemId)
@@ -216,16 +184,16 @@ public class ProductAvailabilityService : IProductAvailabilityService
         }
 
         // Live inventory is intentionally not cached; final order completion also locks inventory rows in the DB.
-        var locationIds = new[] { kitchenLocationId, stockRoomLocationId };
+        var locationIds = new[] { kitchenLocationId };
         var rows = await _context.InventoryStocks
             .AsNoTracking()
             .Where(x => x.BranchId == branchId && locationIds.Contains(x.InventoryLocationId) && inventoryItemIds.Contains(x.InventoryItemId))
-            .Select(x => new { x.InventoryItemId, x.InventoryLocationId, x.QuantityBase })
+            .Select(x => new { x.InventoryItemId, x.InventoryLocationId, x.QuantityBase, x.ReservedQuantityBase })
             .ToListAsync(cancellationToken);
 
         return rows.ToDictionary(
-            x => new InventoryLocationKey(x.InventoryItemId, x.InventoryLocationId == stockRoomLocationId ? "Stock Room" : "Kitchen"),
-            x => x.QuantityBase);
+            x => new InventoryLocationKey(x.InventoryItemId, "Kitchen"),
+            x => x.QuantityBase - x.ReservedQuantityBase);
     }
 
     private static bool CanMakeOne(PosProductMenuItem product, Dictionary<InventoryLocationKey, decimal> inventory) =>
@@ -276,9 +244,7 @@ public class ProductAvailabilityService : IProductAvailabilityService
         int CategoryId,
         string CategoryName,
         bool IsActive,
-        string? ImagePath,
-        int? DirectInventoryItemId,
-        decimal? DirectQuantityBase)
+        string? ImagePath)
     {
         public List<InventoryRequirement> Requirements { get; init; } = [];
     }

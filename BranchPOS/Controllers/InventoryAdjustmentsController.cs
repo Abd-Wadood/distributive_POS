@@ -43,10 +43,20 @@ public class InventoryAdjustmentsController : Controller
         return View(await _adjustmentService.GetAdjustmentsAsync(branchId, locationType, adjustmentType, status, from, to));
     }
 
-    public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create(
+        int? inventoryItemId,
+        InventoryLocationType? locationType,
+        InventoryAdjustmentType? adjustmentType,
+        string? reason)
     {
         await PopulateCreateLookupsAsync();
-        return View(new CreateInventoryAdjustmentDto());
+        return View(new CreateInventoryAdjustmentDto
+        {
+            InventoryItemId = inventoryItemId ?? 0,
+            LocationType = locationType,
+            AdjustmentType = adjustmentType,
+            Reason = string.IsNullOrWhiteSpace(reason) ? string.Empty : reason.Trim()
+        });
     }
 
     [HttpPost, ValidateAntiForgeryToken]

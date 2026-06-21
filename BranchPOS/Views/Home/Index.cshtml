@@ -383,7 +383,7 @@ else
                 <a class="list-group-item list-group-item-action" asp-controller="Products" asp-action="Index">Products</a>
                 <a class="list-group-item list-group-item-action" asp-controller="InventoryItems" asp-action="Index">Inventory Items</a>
                 <a class="list-group-item list-group-item-action" asp-controller="InventoryReports" asp-action="StockRoom">Stock Room Inventory</a>
-                <a class="list-group-item list-group-item-action" asp-controller="PreparedStock" asp-action="Add">Add Prepared</a>
+                <a class="list-group-item list-group-item-action" asp-controller="InventoryAdjustments" asp-action="Create" asp-route-locationType="StockRoom" asp-route-adjustmentType="CorrectionIncrease" asp-route-reason="Internal Preparation">Stock In / Internal Preparation</a>
                 <a class="list-group-item list-group-item-action" asp-controller="Purchases" asp-action="Index">Purchases</a>
                 <a class="list-group-item list-group-item-action" asp-controller="Sessions" asp-action="Index">Manage stock session</a>
             }

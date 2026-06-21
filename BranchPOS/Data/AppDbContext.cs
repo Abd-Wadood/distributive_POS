@@ -35,6 +35,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OrderInventoryReservation> OrderInventoryReservations => Set<OrderInventoryReservation>();
+    public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<UserSessionHeartbeat> UserSessionHeartbeats => Set<UserSessionHeartbeat>();
     public DbSet<Terminal> Terminals => Set<Terminal>();
@@ -134,11 +136,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
 
         builder.Entity<InventoryStock>(entity =>
         {
-            entity.ToTable(t => t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_NonNegative", "\"QuantityBase\" >= 0"));
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_NonNegative", "\"QuantityBase\" >= 0");
+                t.HasCheckConstraint("CK_InventoryStocks_ReservedQuantityBase_NonNegative", "\"ReservedQuantityBase\" >= 0");
+                t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_Covers_Reserved", "\"QuantityBase\" >= \"ReservedQuantityBase\"");
+            });
             entity.Property<uint>("xmin").IsRowVersion();
             entity.HasIndex(x => new { x.InventoryItemId, x.InventoryLocationId }).IsUnique().HasDatabaseName("UX_InventoryStocks_Item_Location");
             entity.HasIndex(x => x.BranchId);
             entity.Property(x => x.QuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.ReservedQuantityBase).HasPrecision(18, 3).HasDefaultValue(0m);
             entity.Property(x => x.AverageUnitCostBase).HasPrecision(18, 6);
             entity.HasOne(x => x.Branch)
                 .WithMany()
@@ -207,6 +215,32 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasOne(x => x.KitchenRequestDetail)
                 .WithMany()
                 .HasForeignKey(x => x.KitchenRequestDetailId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<PrintJob>(entity =>
+        {
+            entity.HasIndex(x => new { x.BranchId, x.Status, x.CreatedAt }).HasDatabaseName("IX_PrintJobs_Branch_Status_CreatedAt");
+            entity.HasIndex(x => new { x.OrderId, x.PrintType }).HasDatabaseName("IX_PrintJobs_Order_PrintType");
+            entity.Property(x => x.PrintType).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.PrinterTarget).HasMaxLength(80);
+            entity.Property(x => x.PayloadJson).HasColumnType("jsonb");
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Terminal)
+                .WithMany()
+                .HasForeignKey(x => x.TerminalId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Order)
+                .WithMany(x => x.PrintJobs)
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -565,6 +599,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .IsUnique()
                 .HasFilter("\"IdempotencyKey\" IS NOT NULL")
                 .HasDatabaseName("UX_Orders_IdempotencyKey");
+            entity.HasIndex(x => new { x.BranchId, x.ClientRequestId })
+                .IsUnique()
+                .HasFilter("\"ClientRequestId\" IS NOT NULL")
+                .HasDatabaseName("UX_Orders_BranchId_ClientRequestId");
             entity.HasIndex(x => new { x.BranchId, x.OrderNumber }).IsUnique().HasDatabaseName("UX_Orders_BranchId_OrderNumber");
             entity.HasIndex(x => x.BranchId);
             entity.HasIndex(x => x.TerminalId);
@@ -572,10 +610,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasIndex(x => x.CreatedAt);
             entity.HasIndex(x => new { x.BranchId, x.CompletedAt, x.OrderStatus }).HasDatabaseName("IX_Orders_BranchId_CompletedAt_OrderStatus");
             entity.HasIndex(x => x.OrderStatus);
+            entity.HasIndex(x => new { x.BranchId, x.PaymentStatus, x.CreatedAt }).HasDatabaseName("IX_Orders_Branch_PaymentStatus_CreatedAt");
+            entity.HasIndex(x => new { x.BranchId, x.OrderStatus, x.InventoryState }).HasDatabaseName("IX_Orders_Branch_Status_InventoryState");
             entity.Property(x => x.OrderNumber).HasMaxLength(40).IsRequired();
             entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
+            entity.Property(x => x.ClientRequestId).HasMaxLength(120);
             entity.Property(x => x.OrderType).HasConversion<string>().HasMaxLength(40);
             entity.Property(x => x.OrderStatus).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.InventoryState).HasConversion<string>().HasMaxLength(40).HasDefaultValue(OrderInventoryState.None);
+            entity.Property(x => x.PaymentStatus).HasConversion<string>().HasMaxLength(40).HasDefaultValue(PaymentStatus.Unpaid);
+            entity.Property(x => x.PaymentMethod).HasMaxLength(40);
             entity.Property(x => x.Subtotal).HasPrecision(18, 2);
             entity.Property(x => x.DiscountAmount).HasPrecision(18, 2);
             entity.Property(x => x.TotalAmount).HasPrecision(18, 2);
@@ -583,6 +627,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.Property(x => x.TerminalName).HasMaxLength(120);
             entity.Property(x => x.TerminalCode).HasMaxLength(40).IsRequired();
             entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.Property(x => x.CancellationReason).HasMaxLength(500);
+            entity.Property(x => x.InventoryCorrectionType).HasMaxLength(40);
             entity.HasOne(x => x.Branch)
                 .WithMany()
                 .HasForeignKey(x => x.BranchId)
@@ -603,6 +649,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
                 .WithMany()
                 .HasForeignKey(x => x.TerminalId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.CancelledByUser)
+                .WithMany()
+                .HasForeignKey(x => x.CancelledByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.PaymentReceivedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.PaymentReceivedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<OrderItem>(entity =>
@@ -623,6 +677,38 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole, str
             entity.HasOne(x => x.Product)
                 .WithMany(x => x.OrderItems)
                 .HasForeignKey(x => x.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<OrderInventoryReservation>(entity =>
+        {
+            entity.ToTable(t => t.HasCheckConstraint("CK_OrderInventoryReservations_RequiredQuantity_Positive", "\"RequiredQuantityBase\" > 0"));
+            entity.HasIndex(x => x.BranchId).HasDatabaseName("IX_OrderInventoryReservations_BranchId");
+            entity.HasIndex(x => new { x.OrderId, x.Status }).HasDatabaseName("IX_OrderInventoryReservations_Order_Status");
+            entity.HasIndex(x => new { x.InventoryStockId, x.Status }).HasDatabaseName("IX_OrderInventoryReservations_Stock_Status");
+            entity.HasIndex(x => new { x.InventoryItemId, x.Status }).HasDatabaseName("IX_OrderInventoryReservations_Item_Status");
+            entity.Property(x => x.RequiredQuantityBase).HasPrecision(18, 3);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(120);
+            entity.HasOne(x => x.Branch)
+                .WithMany()
+                .HasForeignKey(x => x.BranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Order)
+                .WithMany(x => x.InventoryReservations)
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.InventoryStock)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryStockId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryItem)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.InventoryLocation)
+                .WithMany()
+                .HasForeignKey(x => x.InventoryLocationId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

@@ -9,6 +9,8 @@ public class PosOrderViewModel
     public List<Category> Categories { get; set; } = new();
 
     public List<PosDraftOrderViewModel> DraftOrders { get; set; } = new();
+
+    public List<PosPendingOrderViewModel> PendingOrders { get; set; } = new();
 }
 
 public class PosProductViewModel
@@ -58,4 +60,25 @@ public class PosDraftItemViewModel
     public int ProductId { get; set; }
 
     public int Quantity { get; set; }
+}
+
+public class PosPendingOrderViewModel
+{
+    public int Id { get; set; }
+
+    public string OrderNumber { get; set; } = string.Empty;
+
+    public string OrderType { get; set; } = string.Empty;
+
+    public string OrderStatus { get; set; } = string.Empty;
+
+    public string InventoryState { get; set; } = string.Empty;
+
+    public decimal TotalAmount { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public string? CustomerName { get; set; }
+
+    public string ItemsText { get; set; } = string.Empty;
 }

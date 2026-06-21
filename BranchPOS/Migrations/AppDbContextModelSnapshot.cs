@@ -2013,6 +2013,12 @@ namespace BranchPOS.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
+                    b.Property<decimal>("ReservedQuantityBase")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasDefaultValue(0m);
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2034,7 +2040,11 @@ namespace BranchPOS.Migrations
 
                     b.ToTable("InventoryStocks", t =>
                         {
+                            t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_Covers_Reserved", "\"QuantityBase\" >= \"ReservedQuantityBase\"");
+
                             t.HasCheckConstraint("CK_InventoryStocks_QuantityBase_NonNegative", "\"QuantityBase\" >= 0");
+
+                            t.HasCheckConstraint("CK_InventoryStocks_ReservedQuantityBase_NonNegative", "\"ReservedQuantityBase\" >= 0");
                         });
                 });
 
@@ -2356,9 +2366,23 @@ namespace BranchPOS.Migrations
                     b.Property<int>("BranchId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CancelledByUserId")
+                        .HasColumnType("text");
+
                     b.Property<string>("CashierId")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("ClientRequestId")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2373,9 +2397,23 @@ namespace BranchPOS.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<DateTime?>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("IdempotencyKey")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<string>("InventoryCorrectionType")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("InventoryState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("None");
 
                     b.Property<bool>("IsSynced")
                         .HasColumnType("boolean");
@@ -2399,8 +2437,31 @@ namespace BranchPOS.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("PaymentReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentReceivedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Unpaid");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ReadyAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("SentToKitchenAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
@@ -2439,6 +2500,8 @@ namespace BranchPOS.Migrations
 
                     b.HasIndex("BranchId");
 
+                    b.HasIndex("CancelledByUserId");
+
                     b.HasIndex("CashierId");
 
                     b.HasIndex("CreatedAt");
@@ -2452,6 +2515,8 @@ namespace BranchPOS.Migrations
 
                     b.HasIndex("OrderStatus");
 
+                    b.HasIndex("PaymentReceivedByUserId");
+
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UX_Orders_PublicId");
@@ -2460,6 +2525,11 @@ namespace BranchPOS.Migrations
 
                     b.HasIndex("UserSessionId");
 
+                    b.HasIndex("BranchId", "ClientRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Orders_BranchId_ClientRequestId")
+                        .HasFilter("\"ClientRequestId\" IS NOT NULL");
+
                     b.HasIndex("BranchId", "OrderNumber")
                         .IsUnique()
                         .HasDatabaseName("UX_Orders_BranchId_OrderNumber");
@@ -2467,7 +2537,83 @@ namespace BranchPOS.Migrations
                     b.HasIndex("BranchId", "CompletedAt", "OrderStatus")
                         .HasDatabaseName("IX_Orders_BranchId_CompletedAt_OrderStatus");
 
+                    b.HasIndex("BranchId", "OrderStatus", "InventoryState")
+                        .HasDatabaseName("IX_Orders_Branch_Status_InventoryState");
+
+                    b.HasIndex("BranchId", "PaymentStatus", "CreatedAt")
+                        .HasDatabaseName("IX_Orders_Branch_PaymentStatus_CreatedAt");
+
                     b.ToTable("Orders");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.OrderInventoryReservation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InventoryLocationId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InventoryStockId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("RequiredQuantityBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("WastedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId")
+                        .HasDatabaseName("IX_OrderInventoryReservations_BranchId");
+
+                    b.HasIndex("InventoryLocationId");
+
+                    b.HasIndex("InventoryItemId", "Status")
+                        .HasDatabaseName("IX_OrderInventoryReservations_Item_Status");
+
+                    b.HasIndex("InventoryStockId", "Status")
+                        .HasDatabaseName("IX_OrderInventoryReservations_Stock_Status");
+
+                    b.HasIndex("OrderId", "Status")
+                        .HasDatabaseName("IX_OrderInventoryReservations_Order_Status");
+
+                    b.ToTable("OrderInventoryReservations", t =>
+                        {
+                            t.HasCheckConstraint("CK_OrderInventoryReservations_RequiredQuantity_Positive", "\"RequiredQuantityBase\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("BranchPOS.Models.OrderItem", b =>
@@ -2686,6 +2832,68 @@ namespace BranchPOS.Migrations
                         .HasDatabaseName("UX_PreparationRecipeIngredients_Recipe_Item");
 
                     b.ToTable("PreparationRecipeIngredients");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PrintJob", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PrintType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("PrintedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PrinterTarget")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int?>("TerminalId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TerminalId");
+
+                    b.HasIndex("OrderId", "PrintType")
+                        .HasDatabaseName("IX_PrintJobs_Order_PrintType");
+
+                    b.HasIndex("BranchId", "Status", "CreatedAt")
+                        .HasDatabaseName("IX_PrintJobs_Branch_Status_CreatedAt");
+
+                    b.ToTable("PrintJobs");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Product", b =>
@@ -3886,6 +4094,11 @@ namespace BranchPOS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CancelledByUser")
+                        .WithMany()
+                        .HasForeignKey("CancelledByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("BranchPOS.Models.ApplicationUser", "Cashier")
                         .WithMany("Orders")
                         .HasForeignKey("CashierId")
@@ -3896,6 +4109,11 @@ namespace BranchPOS.Migrations
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "PaymentReceivedByUser")
+                        .WithMany()
+                        .HasForeignKey("PaymentReceivedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("BranchPOS.Models.Terminal", "Terminal")
                         .WithMany()
@@ -3910,13 +4128,60 @@ namespace BranchPOS.Migrations
 
                     b.Navigation("Branch");
 
+                    b.Navigation("CancelledByUser");
+
                     b.Navigation("Cashier");
 
                     b.Navigation("Customer");
 
+                    b.Navigation("PaymentReceivedByUser");
+
                     b.Navigation("Terminal");
 
                     b.Navigation("UserSession");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.OrderInventoryReservation", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryItem", "InventoryItem")
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryLocation", "InventoryLocation")
+                        .WithMany()
+                        .HasForeignKey("InventoryLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.InventoryStock", "InventoryStock")
+                        .WithMany()
+                        .HasForeignKey("InventoryStockId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.Order", "Order")
+                        .WithMany("InventoryReservations")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("InventoryLocation");
+
+                    b.Navigation("InventoryStock");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.OrderItem", b =>
@@ -4038,6 +4303,39 @@ namespace BranchPOS.Migrations
                     b.Navigation("InventoryItem");
 
                     b.Navigation("PreparationRecipe");
+                });
+
+            modelBuilder.Entity("BranchPOS.Models.PrintJob", b =>
+                {
+                    b.HasOne("BranchPOS.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BranchPOS.Models.Order", "Order")
+                        .WithMany("PrintJobs")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BranchPOS.Models.Terminal", "Terminal")
+                        .WithMany()
+                        .HasForeignKey("TerminalId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Terminal");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.Product", b =>
@@ -4383,7 +4681,11 @@ namespace BranchPOS.Migrations
 
             modelBuilder.Entity("BranchPOS.Models.Order", b =>
                 {
+                    b.Navigation("InventoryReservations");
+
                     b.Navigation("Items");
+
+                    b.Navigation("PrintJobs");
                 });
 
             modelBuilder.Entity("BranchPOS.Models.PreparationRecipe", b =>

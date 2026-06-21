@@ -1,29 +1,27 @@
 @model IEnumerable<BranchPOS.Models.InventoryStock>
 @{
     ViewData["Title"] = "Inventory Stock";
-    var preparedRecipeOutputQuantities = ViewBag.PreparedRecipeOutputQuantities as Dictionary<int, decimal> ?? new Dictionary<int, decimal>();
 }
 
 <h1>@ViewData["Title"]</h1>
 <table class="table table-striped">
-    <thead><tr><th>Item</th><th>Base unit</th><th>Base quantity</th><th>Display</th><th>Reorder level</th><th>Average base cost</th><th>Status</th></tr></thead>
+    <thead><tr><th>Item</th><th>Base unit</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Display</th><th>Reorder level</th><th>Average base cost</th><th>Status</th></tr></thead>
     <tbody>
     @foreach (var stock in Model)
     {
-        var low = stock.QuantityBase <= stock.InventoryItem?.ReorderLevel;
-        var display = stock.InventoryItem?.IsPreparedItem == true
-            && preparedRecipeOutputQuantities.TryGetValue(stock.InventoryItemId, out var preparedOutputQuantity)
-            && preparedOutputQuantity > 0
-            ? $"{stock.QuantityBase / preparedOutputQuantity:0.###} {stock.InventoryItem.Name}"
-            : stock.InventoryItem?.BaseUnit == "Gram" && stock.QuantityBase >= 1000
-            ? $"{stock.QuantityBase / 1000:0.###} kg"
-            : stock.InventoryItem?.BaseUnit == "ML" && stock.QuantityBase >= 1000
-                ? $"{stock.QuantityBase / 1000:0.###} L"
-                : $"{stock.QuantityBase:0.###} {stock.InventoryItem?.BaseUnit?.ToLowerInvariant()}";
+        var available = stock.QuantityBase - stock.ReservedQuantityBase;
+        var low = available <= stock.InventoryItem?.ReorderLevel;
+        var display = stock.InventoryItem?.BaseUnit == "Gram" && available >= 1000
+            ? $"{available / 1000:0.###} kg"
+            : stock.InventoryItem?.BaseUnit == "ML" && available >= 1000
+                ? $"{available / 1000:0.###} L"
+                : $"{available:0.###} {stock.InventoryItem?.BaseUnit?.ToLowerInvariant()}";
         <tr class="@(low ? "table-warning" : "")">
             <td>@stock.InventoryItem?.Name</td>
             <td>@stock.InventoryItem?.BaseUnit</td>
             <td>@stock.QuantityBase.ToString("0.###")</td>
+            <td>@stock.ReservedQuantityBase.ToString("0.###")</td>
+            <td>@available.ToString("0.###")</td>
             <td>@display</td>
             <td>@stock.InventoryItem?.ReorderLevel.ToString("0.###")</td>
             <td>@stock.AverageUnitCostBase.ToString("0.######")</td>

@@ -283,12 +283,12 @@ public class UserSessionService : IUserSessionService
                 RequestedAt = x.ClosingRequestedAt,
                 OpeningCash = x.OpeningCashAmount,
                 ExpectedClosingCash = x.ExpectedClosingCash ?? x.OpeningCashAmount + _context.Orders
-                    .Where(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed)
+                    .Where(o => o.UserSessionId == x.Id && (o.PaymentStatus == PaymentStatus.Paid || (o.PaymentStatus == PaymentStatus.Unpaid && o.OrderStatus == OrderStatus.Completed)))
                     .Sum(o => o.TotalAmount),
                 CountedClosingCash = x.CountedClosingCash ?? 0,
-                CompletedOrdersCount = _context.Orders.Count(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed),
+                CompletedOrdersCount = _context.Orders.Count(o => o.UserSessionId == x.Id && (o.PaymentStatus == PaymentStatus.Paid || (o.PaymentStatus == PaymentStatus.Unpaid && o.OrderStatus == OrderStatus.Completed))),
                 TotalSalesAmount = _context.Orders
-                    .Where(o => o.UserSessionId == x.Id && o.OrderStatus == OrderStatus.Completed)
+                    .Where(o => o.UserSessionId == x.Id && (o.PaymentStatus == PaymentStatus.Paid || (o.PaymentStatus == PaymentStatus.Unpaid && o.OrderStatus == OrderStatus.Completed)))
                     .Sum(o => o.TotalAmount),
                 IdempotencyKey = Guid.NewGuid().ToString("N")
             })
@@ -513,8 +513,8 @@ public class UserSessionService : IUserSessionService
         return new SessionSummaryViewModel
         {
             Session = session,
-            CompletedOrdersCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed, cancellationToken),
-            TotalSalesAmount = await _context.Orders.Where(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed).SumAsync(x => x.TotalAmount, cancellationToken),
+            CompletedOrdersCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)), cancellationToken),
+            TotalSalesAmount = await _context.Orders.Where(x => x.UserSessionId == session.Id && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed))).SumAsync(x => x.TotalAmount, cancellationToken),
             CancelledOrdersCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Cancelled, cancellationToken),
             ActiveDraftOrdersCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Draft, cancellationToken),
             PurchasesCount = await _context.Purchases.CountAsync(x => x.UserSessionId == session.Id, cancellationToken),
@@ -522,7 +522,7 @@ public class UserSessionService : IUserSessionService
                 .Where(x => x.Purchase!.UserSessionId == session.Id)
                 .SumAsync(x => x.TotalCost, cancellationToken),
             InventoryAdjustmentsCount = await _context.InventoryMovements.CountAsync(x => x.CreatedByUserId == session.UserId && x.MovementType == InventoryMovementType.Adjustment, cancellationToken),
-            LowStockWarnings = await _context.InventoryStocks.CountAsync(x => x.BranchId == session.BranchId && x.QuantityBase <= x.InventoryItem!.ReorderLevel, cancellationToken),
+            LowStockWarnings = await _context.InventoryStocks.CountAsync(x => x.BranchId == session.BranchId && x.QuantityBase - x.ReservedQuantityBase <= x.InventoryItem!.ReorderLevel, cancellationToken),
             ExpectedClosingCash = session.ExpectedClosingCash ?? await CalculateExpectedClosingCashAsync(session.Id, session.OpeningCashAmount, cancellationToken),
             CountedClosingCash = session.CountedClosingCash,
             CashDifference = session.CashDifference
@@ -574,14 +574,14 @@ public class UserSessionService : IUserSessionService
 
     private async Task<SessionCloseViewModel> BuildCloseViewModelAsync(UserSession session, CancellationToken cancellationToken)
     {
-        var completed = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed, cancellationToken);
+        var completed = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)), cancellationToken);
         var drafts = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Draft, cancellationToken);
         var pending = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Pending, cancellationToken);
         var unknownFinalize = await _context.Orders.CountAsync(x =>
             x.UserSessionId == session.Id &&
             (x.OrderStatus == OrderStatus.UnknownFinalize || x.OrderStatus == OrderStatus.ReceiptFailed), cancellationToken);
         var sales = await _context.Orders
-            .Where(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed)
+            .Where(x => x.UserSessionId == session.Id && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)))
             .SumAsync(x => x.TotalAmount, cancellationToken);
         return new SessionCloseViewModel
         {
@@ -606,12 +606,6 @@ public class UserSessionService : IUserSessionService
             blockers.Add($"Complete or cancel {draftOrders} held/draft order(s) before closing.");
         }
 
-        var pendingOrders = await _context.Orders.CountAsync(x => x.UserSessionId == sessionId && x.OrderStatus == OrderStatus.Pending, cancellationToken);
-        if (pendingOrders > 0)
-        {
-            blockers.Add($"Resolve {pendingOrders} payment-pending/unpaid order(s) before closing.");
-        }
-
         var unknownFinalizeOrders = await _context.Orders.CountAsync(x =>
             x.UserSessionId == sessionId &&
             (x.OrderStatus == OrderStatus.UnknownFinalize || x.OrderStatus == OrderStatus.ReceiptFailed), cancellationToken);
@@ -626,7 +620,7 @@ public class UserSessionService : IUserSessionService
     private async Task<decimal> CalculateExpectedClosingCashAsync(int sessionId, decimal openingCash, CancellationToken cancellationToken)
     {
         var completedSales = await _context.Orders
-            .Where(x => x.UserSessionId == sessionId && x.OrderStatus == OrderStatus.Completed)
+            .Where(x => x.UserSessionId == sessionId && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)))
             .SumAsync(x => x.TotalAmount, cancellationToken);
         return openingCash + completedSales;
     }
@@ -644,7 +638,7 @@ public class UserSessionService : IUserSessionService
             reasons.Add("session was started less than 5 minutes ago");
         }
 
-        var orderCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && x.OrderStatus == OrderStatus.Completed, cancellationToken);
+        var orderCount = await _context.Orders.CountAsync(x => x.UserSessionId == session.Id && (x.PaymentStatus == PaymentStatus.Paid || (x.PaymentStatus == PaymentStatus.Unpaid && x.OrderStatus == OrderStatus.Completed)), cancellationToken);
         if (orderCount == 0)
         {
             reasons.Add("session has zero completed orders");

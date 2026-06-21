@@ -1,0 +1,184 @@
+@model BranchPOS.ViewModels.OrderCorrectionViewModel
+@using BranchPOS.Utilities
+
+@{
+    ViewData["Title"] = "Order Correction";
+}
+
+<h1>Order Correction</h1>
+
+@if (!string.IsNullOrWhiteSpace(Model.Message))
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+
+<form asp-action="Search" asp-controller="InventoryManager" method="post" class="row g-2 align-items-end mb-4">
+    @Html.AntiForgeryToken()
+    <div class="col-md-8">
+        <label class="form-label" for="orderNumber">Order number</label>
+        <input id="orderNumber" name="orderNumber" class="form-control" value="@Model.SearchOrderNumber" required />
+    </div>
+    <div class="col-md-4">
+        <button class="btn btn-primary w-100" type="submit">Search</button>
+    </div>
+</form>
+
+@if (Model.Order is not null)
+{
+    var order = Model.Order;
+    var isCancelled = order.OrderStatus is BranchPOS.Models.OrderStatus.Cancelled
+        or BranchPOS.Models.OrderStatus.CancelledAfterPreparation
+        or BranchPOS.Models.OrderStatus.CancelledAsWaste;
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>@order.OrderNumber</strong>
+            <span class="badge text-bg-secondary">@order.OrderStatus / @order.InventoryState / @order.PaymentStatus</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3"><div class="text-muted small">Type</div><strong>@order.OrderType</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Total</div><strong>@CurrencyFormatter.Format(order.TotalAmount)</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Branch</div><strong>@order.BranchName</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Cashier</div><strong>@order.CashierName</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Terminal</div><strong>@order.TerminalName</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Session</div><strong>@(order.SessionCode ?? "-")</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Created</div><strong>@order.CreatedAt.ToLocalTime()</strong></div>
+                <div class="col-md-3"><div class="text-muted small">Punched</div><strong>@(order.SentToKitchenAt?.ToLocalTime().ToString() ?? "-")</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><strong>Items</strong></div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <thead><tr><th>Item</th><th class="text-end">Qty</th><th class="text-end">Total</th></tr></thead>
+                        <tbody>
+                        @foreach (var item in order.Items)
+                        {
+                            <tr>
+                                <td>@item.Name</td>
+                                <td class="text-end">@item.Quantity</td>
+                                <td class="text-end">@CurrencyFormatter.Format(item.LineTotal)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><strong>Consumed Inventory</strong></div>
+                <div class="card-body">
+                    @if (order.ConsumedInventory.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No consumption movement was found.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead><tr><th>Item</th><th class="text-end">Quantity</th></tr></thead>
+                            <tbody>
+                            @foreach (var item in order.ConsumedInventory)
+                            {
+                                <tr>
+                                    <td>@item.Name</td>
+                                    <td class="text-end">@item.Quantity.ToString("0.###") @item.Unit</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card my-3">
+        <div class="card-header"><strong>Manager Actions</strong></div>
+        <div class="card-body">
+            @if (isCancelled)
+            {
+                <div class="alert alert-warning mb-3">
+                    This order is already cancelled. You cannot cancel the same order again.
+                </div>
+            }
+            <div class="row g-3">
+                @if (!isCancelled)
+                {
+                    <div class="col-lg-6">
+                        <form asp-action="CancelAndRestoreStock" asp-controller="InventoryManager" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="orderId" value="@order.Id" />
+                            <label class="form-label" for="restoreReason">Not prepared cancellation reason</label>
+                            <textarea id="restoreReason" name="reason" class="form-control mb-2" rows="2" maxlength="500"></textarea>
+                            <button class="btn btn-warning w-100" type="submit">Cancel - Not Prepared, Restore Stock</button>
+                        </form>
+                    </div>
+                    <div class="col-lg-6">
+                        <form asp-action="CancelAsWaste" asp-controller="InventoryManager" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="orderId" value="@order.Id" />
+                            <label class="form-label" for="wasteReason">Prepared cancellation reason</label>
+                            <textarea id="wasteReason" name="reason" class="form-control mb-2" rows="2" maxlength="500"></textarea>
+                            <button class="btn btn-danger w-100" type="submit">Cancel - Prepared, Keep Stock Deducted</button>
+                        </form>
+                    </div>
+                }
+                <div class="col-lg-6">
+                    <form asp-action="ReprintKot" asp-controller="InventoryManager" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="orderId" value="@order.Id" />
+                        <button class="btn btn-outline-primary w-100" type="submit">Reprint KOT</button>
+                    </form>
+                </div>
+                <div class="col-lg-6">
+                    <form asp-action="ReprintBill" asp-controller="InventoryManager" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="orderId" value="@order.Id" />
+                        <button class="btn btn-outline-primary w-100" type="submit">Reprint Customer Bill</button>
+                    </form>
+                </div>
+                @if (order.PaymentStatus == BranchPOS.Models.PaymentStatus.CODPending)
+                {
+                    <div class="col-lg-6">
+                        <form asp-action="MarkCodPaid" asp-controller="InventoryManager" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="orderId" value="@order.Id" />
+                            <button class="btn btn-success w-100" type="submit">Mark COD Paid</button>
+                        </form>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><strong>Print Jobs</strong></div>
+        <div class="card-body">
+            @if (order.PrintJobs.Count == 0)
+            {
+                <p class="text-muted mb-0">No print jobs found.</p>
+            }
+            else
+            {
+                <table class="table table-sm">
+                    <thead><tr><th>Type</th><th>Status</th><th>Created</th></tr></thead>
+                    <tbody>
+                    @foreach (var printJob in order.PrintJobs)
+                    {
+                        <tr>
+                            <td>@printJob.PrintType</td>
+                            <td>@printJob.Status</td>
+                            <td>@printJob.CreatedAt.ToLocalTime()</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}

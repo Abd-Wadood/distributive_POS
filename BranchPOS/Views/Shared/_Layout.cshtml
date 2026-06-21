@@ -356,18 +356,17 @@
             new NavigationItem("Products", "Products", "Index", "P", ["StockManager"], ["Index", "Create", "Edit"]),
             new NavigationItem("Inventory Items", "InventoryItems", "Index", "II", ["StockManager"], ["Index", "Create", "Edit"]),
             new NavigationItem("Product Recipes", "Recipes", "Index", "R", ["StockManager"], ["Index", "Edit"]),
-            new NavigationItem("Prepared Inventory", "PreparationRecipes", "Index", "PI", ["StockManager"], ["Index", "Edit", "Deactivate"]),
             new NavigationItem("Categories", "Categories", "Index", "C", ["Admin"]),
             new NavigationItem("Suppliers", "Suppliers", "Index", "S", ["Admin"])
         ]),
         new NavigationGroup("stock-operations", "Stock Operations", "SO",
         [
             new NavigationItem("Purchases", "Purchases", "Index", "PU", ["StockManager"], ["Index", "Create", "Details"]),
-            new NavigationItem("Add Prepared Stock", "PreparedStock", "Add", "AP", ["StockManager"]),
             new NavigationItem("Kitchen Requests", "KitchenRequests", "Index", "KR", ["StockManager"], ["Index", "Create", "Details"]),
             new NavigationItem("Manual Kitchen Usage", "ManualKitchenUsage", "Index", "MU", ["StockManager"]),
             new NavigationItem("Stock Counts", "StockCounts", "Index", "SC", ["StockManager"]),
-            new NavigationItem("Inventory Adjustments", "InventoryAdjustments", "Index", "IA", ["StockManager"], ["Index", "Create", "Details", "WastageSummary"])
+            new NavigationItem("Inventory Adjustments", "InventoryAdjustments", "Index", "IA", ["StockManager"], ["Index", "Create", "Details", "WastageSummary"]),
+            new NavigationItem("Order Correction", "InventoryManager", "OrderCorrection", "OC", ["StockManager", "Admin"])
         ]),
         new NavigationGroup("inventory-views", "Inventory Views", "IV",
         [
@@ -377,7 +376,7 @@
         ]),
         new NavigationGroup("reports", "Reports", "RP",
         [
-            new NavigationItem("Inventory Reports", "InventoryReports", "Index", "IR", ["StockManager"], ["Index", "ControlModes", "ManualUsage", "PeriodicCountVariance", "ExpenseOnlyPurchases", "RecipeConsumption"]),
+            new NavigationItem("Inventory Reports", "InventoryReports", "Index", "IR", ["StockManager"], ["Index", "ManualUsage", "PeriodicCountVariance", "RecipeConsumption"]),
             new NavigationItem("Profit Report", "InventoryReports", "Profit", "PR", ["StockManager"]),
             new NavigationItem("Operational Expenses", "OperationalExpenses", "Index", "OE", ["StockManager"], ["Index", "Create"]),
             new NavigationItem("Reports", "Reports", "Index", "R", ["Admin"])

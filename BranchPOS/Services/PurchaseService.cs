@@ -116,7 +116,7 @@ public class PurchaseService : IPurchaseService
 
         var inventoryItemIds = dto.Items.Select(x => x.InventoryItemId).Distinct().ToList();
         var validInventoryItems = await _context.InventoryItems
-            .Where(x => x.BranchId == dto.BranchId && x.IsActive && inventoryItemIds.Contains(x.Id))
+            .Where(x => x.BranchId == dto.BranchId && x.IsActive && x.IsStockTracked && !x.IsExpenseOnly && inventoryItemIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
         if (validInventoryItems.Count != inventoryItemIds.Count)
@@ -124,19 +124,12 @@ public class PurchaseService : IPurchaseService
             throw new BusinessException("Selected inventory item does not belong to the active branch session.");
         }
 
-        if (validInventoryItems.Values.Any(x => x.IsPreparedItem && !x.IsExpenseOnly))
-        {
-            throw new BusinessException("Prepared inventory items must be produced through preparation batches, not supplier purchases.");
-        }
-
         var purchaseLines = dto.Items.Select(item =>
         {
             var inventoryItem = validInventoryItems[item.InventoryItemId];
             var purchaseUnitName = ResolvePurchaseUnitName(inventoryItem, item.PurchaseUnitName);
-            var conversionFactor = inventoryItem.IsExpenseOnly
-                ? 0m
-                : ResolveConversionFactor(inventoryItem, purchaseUnitName, item.ConversionFactorToBase ?? inventoryItem.DefaultConversionFactorToBase);
-            var baseQuantity = inventoryItem.IsExpenseOnly ? 0m : item.PurchaseQuantity * conversionFactor;
+            var conversionFactor = ResolveConversionFactor(inventoryItem, purchaseUnitName, item.ConversionFactorToBase ?? inventoryItem.DefaultConversionFactorToBase);
+            var baseQuantity = item.PurchaseQuantity * conversionFactor;
             var totalCost = item.PurchaseQuantity * item.UnitCostPerPurchaseUnit;
             if (totalCost < 0)
             {
@@ -153,7 +146,7 @@ public class PurchaseService : IPurchaseService
                 item.UnitCostPerPurchaseUnit,
                 unitCostBase,
                 totalCost,
-                inventoryItem.IsExpenseOnly,
+                false,
                 item.Notes);
         })
             .ToList();
@@ -192,7 +185,7 @@ public class PurchaseService : IPurchaseService
         await _context.SaveChangesAsync(cancellationToken);
 
         var stockRoom = await _inventoryTransactionService.GetOrCreateLocationAsync(dto.BranchId, "Stock Room", cancellationToken);
-        foreach (var item in purchaseLines.Where(x => !x.IsExpenseOnly))
+        foreach (var item in purchaseLines)
         {
             await _inventoryTransactionService.CreditAsync(dto.BranchId, item.InventoryItemId, stockRoom.Id, item.BaseQuantity, item.UnitCostBase, cancellationToken);
             _inventoryTransactionService.AddMovement(new InventoryMovementRequest(
@@ -210,23 +203,6 @@ public class PurchaseService : IPurchaseService
                 dto.TerminalId,
                 dto.IdempotencyKey,
                 dto.PerformedByUserId));
-        }
-
-        if (purchaseLines.Any(x => x.IsExpenseOnly))
-        {
-            var category = await GetOrCreateExpenseOnlyCategoryAsync(dto.BranchId, cancellationToken);
-            foreach (var item in purchaseLines.Where(x => x.IsExpenseOnly))
-            {
-                _context.OperationalExpenses.Add(new OperationalExpense
-                {
-                    BranchId = dto.BranchId,
-                    ExpenseCategoryId = category.Id,
-                    Amount = item.TotalCost,
-                    ExpenseDate = DateTime.UtcNow.Date,
-                    Description = $"Expense-only purchase item #{item.InventoryItemId} on purchase #{purchase.Id}",
-                    CreatedByUserId = dto.PerformedByUserId
-                });
-            }
         }
 
         try
@@ -278,42 +254,14 @@ public class PurchaseService : IPurchaseService
     private static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
-    private async Task<ExpenseCategory> GetOrCreateExpenseOnlyCategoryAsync(int branchId, CancellationToken cancellationToken)
-    {
-        const string categoryName = "Expense Only Purchases";
-        var category = await _context.ExpenseCategories
-            .FirstOrDefaultAsync(x => x.BranchId == branchId && x.Name == categoryName, cancellationToken);
-        if (category is not null)
-        {
-            return category;
-        }
-
-        category = new ExpenseCategory { BranchId = branchId, Name = categoryName };
-        _context.ExpenseCategories.Add(category);
-        await _context.SaveChangesAsync(cancellationToken);
-        return category;
-    }
-
     private static string ResolvePurchaseUnitName(InventoryItem inventoryItem, string? requestedPurchaseUnit)
     {
-        if (inventoryItem.IsExpenseOnly)
-        {
-            return string.IsNullOrWhiteSpace(requestedPurchaseUnit)
-                ? InventoryUnitCatalog.None
-                : requestedPurchaseUnit.Trim();
-        }
-
         var purchaseUnitName = string.IsNullOrWhiteSpace(requestedPurchaseUnit)
             ? inventoryItem.PurchaseUnitName?.Trim()
             : requestedPurchaseUnit.Trim();
         if (string.IsNullOrWhiteSpace(purchaseUnitName))
         {
-            if (!InventoryControlDefaults.NeedsPurchaseConversion(inventoryItem))
-            {
-                return inventoryItem.BaseUnit;
-            }
-
-            throw new PosValidationException($"Default purchase unit is not configured for {inventoryItem.Name}. Edit the inventory item before purchasing it.");
+            return inventoryItem.BaseUnit;
         }
 
         return purchaseUnitName;
@@ -321,11 +269,6 @@ public class PurchaseService : IPurchaseService
 
     private static decimal ResolveConversionFactor(InventoryItem inventoryItem, string purchaseUnitName, decimal? requestedConversion)
     {
-        if (!inventoryItem.IsStockTracked || inventoryItem.IsExpenseOnly)
-        {
-            return 0m;
-        }
-
         if (string.Equals(purchaseUnitName, inventoryItem.BaseUnit, StringComparison.OrdinalIgnoreCase))
         {
             return 1m;
@@ -350,11 +293,6 @@ public class PurchaseService : IPurchaseService
 
         if (!conversion.HasValue || conversion.Value <= 0)
         {
-            if (!InventoryControlDefaults.NeedsPurchaseConversion(inventoryItem))
-            {
-                return 1m;
-            }
-
             throw new PosValidationException($"Conversion factor must be greater than zero for {inventoryItem.Name}.");
         }
 

@@ -22,9 +22,9 @@ public class ManualKitchenUsageService : IManualKitchenUsageService
         var item = await _context.InventoryItems
             .FirstOrDefaultAsync(x => x.Id == dto.InventoryItemId && x.BranchId == branchId && x.IsActive, cancellationToken)
             ?? throw new PosNotFoundException("Inventory item was not found.");
-        if (item.ConsumptionMode != ConsumptionMode.ManualKitchenIssue || !item.AllowManualConsumption || !item.IsStockTracked || item.IsExpenseOnly)
+        if (!item.IsStockTracked || item.IsExpenseOnly)
         {
-            throw new BusinessException("Only ManualKitchenIssue items can be entered in manual kitchen usage.");
+            throw new BusinessException("Only stock-tracked items can be entered in manual kitchen usage.");
         }
 
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);

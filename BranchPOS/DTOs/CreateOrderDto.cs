@@ -8,6 +8,8 @@ public class CreateOrderDto
     [Required]
     public string IdempotencyKey { get; set; } = string.Empty;
 
+    public string? ClientRequestId { get; set; }
+
     public int? DraftOrderId { get; set; }
 
     public string CashierId { get; set; } = string.Empty;

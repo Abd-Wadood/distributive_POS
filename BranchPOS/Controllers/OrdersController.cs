@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace BranchPOS.Controllers;
 
-[Authorize(Roles = "Cashier")]
+[Authorize]
 public class OrdersController : Controller
 {
     private readonly AppDbContext _context;
@@ -47,6 +47,7 @@ public class OrdersController : Controller
         return View(await _orderService.GetOrdersAsync());
     }
 
+    [Authorize(Roles = "Cashier")]
     public async Task<IActionResult> Create()
     {
         var cashierId = GetCashierId();
@@ -86,7 +87,22 @@ public class OrdersController : Controller
         });
     }
 
-    [HttpGet]
+    [HttpGet, Authorize(Roles = "Cashier")]
+    public async Task<IActionResult> PendingReserved()
+    {
+        var cashierId = GetCashierId();
+        var session = await _userSessionService.GetActiveSessionAsync(cashierId);
+        if (session is null)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Json(new { success = false, message = "Start or continue a session before viewing pending orders." });
+        }
+
+        var pendingOrders = await _orderService.GetPendingReservedOrdersAsync(session.Id);
+        return Json(pendingOrders.Select(ToPendingOrderViewModel).ToList());
+    }
+
+    [HttpGet, Authorize(Roles = "Cashier")]
     public async Task<IActionResult> Products()
     {
         var cashierId = GetCashierId();
@@ -99,7 +115,7 @@ public class OrdersController : Controller
         return Json(await _productAvailabilityService.GetPosProductsAsync());
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier")]
     public async Task<IActionResult> SaveDraft([FromBody] DraftOrderDto dto)
     {
         try
@@ -140,7 +156,7 @@ public class OrdersController : Controller
         }
     }
 
-    [HttpPost, ValidateAntiForgeryToken, EnableRateLimiting("OrderFinalizePolicy"), RequestSizeLimit(65536)]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier"), EnableRateLimiting("OrderFinalizePolicy"), RequestSizeLimit(65536)]
     public async Task<IActionResult> Finalize([FromBody] CreateOrderDto dto)
     {
         try
@@ -167,13 +183,15 @@ public class OrdersController : Controller
             dto.TerminalName = session.TerminalName;
             dto.TerminalId = terminal.Id;
             dto.TerminalCode = terminal.TerminalCode;
-            var result = await _orderService.FinalizeOrderAsync(dto);
+            dto.ClientRequestId = string.IsNullOrWhiteSpace(dto.ClientRequestId) ? dto.IdempotencyKey : dto.ClientRequestId;
+            var result = await _orderService.PunchOrderAsync(dto);
             var request = await TryCreateAutoKitchenRequestAsync(dto, string.Empty);
             return Json(new
             {
                 success = true,
-                receiptUrl = Url.Action(nameof(Receipt), new { id = result.OrderId }),
+                message = $"Order {result.OrderNumber} punched. Stock deducted. Printing kitchen token and receipt.",
                 order = result,
+                receiptUrl = Url.Action(nameof(Receipt), new { id = result.OrderId, print = 1 }),
                 notification = request is null ? null : $"Kitchen stock is low. Request {request.RequestNumber} has been sent to stock manager."
             });
         }
@@ -197,7 +215,60 @@ public class OrdersController : Controller
         }
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier")]
+    public async Task<IActionResult> CompleteReserved([FromBody] ReservedOrderActionRequest request)
+    {
+        try
+        {
+            var result = await _orderService.CompleteReservedOrderAsync(request.OrderId, GetCashierId());
+            return Json(new
+            {
+                success = true,
+                receiptUrl = Url.Action(nameof(Receipt), new { id = result.OrderId }),
+                order = result
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var message = ToUserMessage(ex);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Json(new { success = false, message });
+        }
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier")]
+    public async Task<IActionResult> CancelReserved([FromBody] ReservedOrderActionRequest request)
+    {
+        try
+        {
+            var result = await _orderService.CancelReservedOrderAsync(request.OrderId, GetCashierId(), BuildCancellationReason(request));
+            return Json(new { success = true, order = result });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var message = ToUserMessage(ex);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Json(new { success = false, message });
+        }
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "StockManager,Admin")]
+    public async Task<IActionResult> WasteReserved([FromBody] ReservedOrderActionRequest request)
+    {
+        try
+        {
+            var result = await _orderService.WasteReservedOrderAsync(request.OrderId, GetCashierId(), request.Reason);
+            return Json(new { success = true, order = result });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var message = ToUserMessage(ex);
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Json(new { success = false, message });
+        }
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Cashier")]
     public async Task<IActionResult> CancelDraft([FromBody] CancelDraftRequest request)
     {
         try
@@ -221,6 +292,33 @@ public class OrdersController : Controller
 
     private string GetCashierId() =>
         User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new InvalidOperationException("Authenticated user was not found.");
+
+    private static PosPendingOrderViewModel ToPendingOrderViewModel(Order order) =>
+        new()
+        {
+            Id = order.Id,
+            OrderNumber = order.OrderNumber,
+            OrderType = order.OrderType.ToString(),
+            OrderStatus = order.OrderStatus.ToString(),
+            InventoryState = order.InventoryState.ToString(),
+            TotalAmount = order.TotalAmount,
+            CreatedAt = order.CreatedAt,
+            CustomerName = order.Customer?.Name,
+            ItemsText = string.Join(", ", order.Items.Select(i => $"{i.ProductNameSnapshot} x{i.Quantity}"))
+        };
+
+    private static string? BuildCancellationReason(ReservedOrderActionRequest request)
+    {
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        var notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        return (reason, notes) switch
+        {
+            (null, null) => null,
+            (not null, null) => reason,
+            (null, not null) => notes,
+            _ => $"{reason}: {notes}"
+        };
+    }
 
     private string ToUserMessage(InvalidOperationException ex)
     {
@@ -309,7 +407,7 @@ public class OrdersController : Controller
                     continue;
                 }
 
-                if (!InventoryControlDefaults.CanUseInRecipe(ingredient.InventoryItem))
+                if (!ingredient.InventoryItem.IsStockTracked || ingredient.InventoryItem.IsExpenseOnly)
                 {
                     continue;
                 }
@@ -351,9 +449,7 @@ public class OrdersController : Controller
                 x.Recipe.Product!.IsActive &&
                 x.InventoryItem != null &&
                 x.InventoryItem.IsStockTracked &&
-                !x.InventoryItem.IsExpenseOnly &&
-                x.InventoryItem.AllowRecipeConsumption &&
-                x.InventoryItem.ConsumptionMode == ConsumptionMode.RecipeConsumption)
+                !x.InventoryItem.IsExpenseOnly)
             .ToListAsync();
 
         var requiredByItem = recipeIngredients
@@ -560,4 +656,13 @@ public class OrdersController : Controller
 public class CancelDraftRequest
 {
     public int OrderId { get; set; }
+}
+
+public class ReservedOrderActionRequest
+{
+    public int OrderId { get; set; }
+
+    public string? Reason { get; set; }
+
+    public string? Notes { get; set; }
 }

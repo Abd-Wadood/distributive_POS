@@ -19,6 +19,20 @@ public interface IOrderService
 
     Task<OrderResultDto> FinalizeOrderAsync(CreateOrderDto dto, CancellationToken cancellationToken = default);
 
+    Task<OrderResultDto> PunchOrderAsync(CreateOrderDto dto, CancellationToken cancellationToken = default);
+
+    Task<OrderResultDto> CompleteReservedOrderAsync(int orderId, string cashierId, CancellationToken cancellationToken = default);
+
+    Task<OrderResultDto> CancelReservedOrderAsync(int orderId, string cashierId, string? reason = null, CancellationToken cancellationToken = default);
+
+    Task<OrderResultDto> WasteReservedOrderAsync(int orderId, string userId, string? reason = null, CancellationToken cancellationToken = default);
+
+    Task<OrderResultDto> CancelAndRestoreOrderAsync(int orderId, string userId, string? reason = null, CancellationToken cancellationToken = default);
+
+    Task<OrderResultDto> CancelConsumedAsWasteAsync(int orderId, string userId, string? reason = null, CancellationToken cancellationToken = default);
+
+    Task<List<Order>> GetPendingReservedOrdersAsync(int sessionId, CancellationToken cancellationToken = default);
+
     Task CancelDraftOrderAsync(int orderId, string cashierId, CancellationToken cancellationToken = default);
 
     Task<Order?> GetReceiptAsync(int orderId, CancellationToken cancellationToken = default);

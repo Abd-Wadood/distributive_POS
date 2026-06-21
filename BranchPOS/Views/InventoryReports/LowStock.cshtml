@@ -5,14 +5,17 @@
 
 <h1>Low Stock Alerts</h1>
 <table class="table table-striped">
-    <thead><tr><th>Location</th><th>Item</th><th>Quantity</th><th>Reorder level</th></tr></thead>
+    <thead><tr><th>Location</th><th>Item</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Reorder level</th></tr></thead>
     <tbody>
     @foreach (var stock in Model)
     {
+        var available = stock.QuantityBase - stock.ReservedQuantityBase;
         <tr>
             <td>@stock.InventoryLocation?.Name</td>
             <td>@stock.InventoryItem?.Name</td>
             <td>@stock.QuantityBase.ToString("0.###") @stock.InventoryItem?.BaseUnit</td>
+            <td>@stock.ReservedQuantityBase.ToString("0.###") @stock.InventoryItem?.BaseUnit</td>
+            <td>@available.ToString("0.###") @stock.InventoryItem?.BaseUnit</td>
             <td>@stock.InventoryItem?.ReorderLevel.ToString("0.###")</td>
         </tr>
     }
