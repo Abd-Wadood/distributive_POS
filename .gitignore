@@ -1,0 +1,56 @@
+# .NET build output
+**/[Bb]in/
+**/[Oo]bj/
+[Aa]rtifacts/
+[Pp]ublish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+*.DotSettings.user
+_ReSharper*/
+
+# Logs
+*.log
+[Ll]ogs/
+
+# Tests and coverage
+[Tt]est[Rr]esults/
+[Cc]overage/
+coverage.*
+*.coverage
+*.coveragexml
+*.cobertura.xml
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+
+# Temporary and OS files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+~$*
+.DS_Store
+Thumbs.db
+
+# Machine-specific application configuration
+**/appsettings.Local.json
+
+# Local IDE caches
+*.csproj.lscache
